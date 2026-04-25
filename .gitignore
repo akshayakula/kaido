@@ -10,3 +10,6 @@ __pycache__/
 audio/sam-audio/
 audio/.venv/
 audio/*.log
+
+# franklin/
+franklin/work/
