@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>ACE // FIRMS — Strait of Hormuz</title>
+    <link rel="preconnect" href="https://maps.googleapis.com" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="hud-top">
+        <div class="brand">
+          <span class="brand-mark">◢◣</span>
+          <span class="brand-name">ACE</span>
+          <span class="brand-sub">FIRMS · STRAIT OF HORMUZ</span>
+        </div>
+        <div class="status">
+          <span class="dot live"></span>
+          <span id="status-text">INITIALIZING</span>
+        </div>
+      </header>
+
+      <aside class="hud-left">
+        <section class="panel">
+          <h3>SECTOR</h3>
+          <div class="kv"><span>AOI</span><span>26.50°N · 56.25°E</span></div>
+          <div class="kv"><span>BBOX</span><span>54,24 → 58,28</span></div>
+          <div class="kv"><span>SOURCE</span><span>NASA FIRMS</span></div>
+        </section>
+        <section class="panel">
+          <h3>TIME WINDOW</h3>
+          <div class="seg" id="range-seg">
+            <button data-days="10">10D</button>
+            <button data-days="30" class="on">30D</button>
+            <button data-days="60">60D</button>
+            <button data-days="90">90D</button>
+          </div>
+        </section>
+        <section class="panel">
+          <h3>SENSORS</h3>
+          <label class="chk"><input type="checkbox" data-src="VIIRS_SNPP_NRT" checked /> VIIRS SNPP</label>
+          <label class="chk"><input type="checkbox" data-src="VIIRS_NOAA20_NRT" checked /> VIIRS NOAA-20</label>
+          <label class="chk"><input type="checkbox" data-src="VIIRS_NOAA21_NRT" checked /> VIIRS NOAA-21</label>
+          <label class="chk"><input type="checkbox" data-src="MODIS_NRT" /> MODIS</label>
+        </section>
+        <section class="panel metrics">
+          <h3>TELEMETRY</h3>
+          <div class="kv"><span>DETECTIONS</span><b id="m-count">—</b></div>
+          <div class="kv"><span>HIGH CONF.</span><b id="m-high">—</b></div>
+          <div class="kv"><span>MAX FRP</span><b id="m-frp">—</b></div>
+          <div class="kv"><span>LAST PASS</span><b id="m-last">—</b></div>
+        </section>
+        <button id="reload" class="action">▶ REFRESH FEED</button>
+      </aside>
+
+      <main id="map-wrap">
+        <gmp-map-3d
+          id="map3d"
+          mode="hybrid"
+          center="26.5,56.25,4000"
+          tilt="65"
+          range="120000"
+          heading="0"
+        ></gmp-map-3d>
+        <div class="crosshair"></div>
+        <div class="scan"></div>
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+      </main>
+
+      <footer class="hud-bottom">
+        <span>ACE-01 · CLASSIFIED OSINT · FIRMS API v1</span>
+        <span id="clock">—</span>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
