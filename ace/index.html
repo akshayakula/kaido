@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
     <title>ACE // FIRMS — Strait of Hormuz</title>
-    <link rel="preconnect" href="https://maps.googleapis.com" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -44,35 +43,44 @@
           <label class="chk"><input type="checkbox" data-src="VIIRS_NOAA21_NRT" checked /> VIIRS NOAA-21</label>
           <label class="chk"><input type="checkbox" data-src="MODIS_NRT" /> MODIS</label>
         </section>
+        <section class="panel">
+          <h3>OVERLAYS</h3>
+          <label class="chk"><input type="checkbox" id="toggle-ports" checked /> MARITIME PORTS</label>
+          <label class="chk"><input type="checkbox" id="toggle-lane" checked /> SHIPPING LANE</label>
+          <label class="chk"><input type="checkbox" id="toggle-fires" checked /> FIRE DETECTIONS</label>
+        </section>
+        <section class="panel">
+          <h3>VIEW</h3>
+          <div class="seg" id="view-seg">
+            <button data-pitch="0">TOP</button>
+            <button data-pitch="45" class="on">3/4</button>
+            <button data-pitch="65">OBLIQUE</button>
+          </div>
+        </section>
         <section class="panel metrics">
           <h3>TELEMETRY</h3>
           <div class="kv"><span>DETECTIONS</span><b id="m-count">—</b></div>
           <div class="kv"><span>HIGH CONF.</span><b id="m-high">—</b></div>
           <div class="kv"><span>MAX FRP</span><b id="m-frp">—</b></div>
           <div class="kv"><span>LAST PASS</span><b id="m-last">—</b></div>
+          <div class="kv"><span>PORTS TRACKED</span><b id="m-ports">—</b></div>
         </section>
         <button id="reload" class="action">▶ REFRESH FEED</button>
       </aside>
 
       <main id="map-wrap">
-        <gmp-map-3d
-          id="map3d"
-          mode="hybrid"
-          center="26.5,56.25,4000"
-          tilt="65"
-          range="120000"
-          heading="0"
-        ></gmp-map-3d>
+        <div id="map"></div>
         <div class="crosshair"></div>
         <div class="scan"></div>
         <div class="corner tl"></div>
         <div class="corner tr"></div>
         <div class="corner bl"></div>
         <div class="corner br"></div>
+        <div class="bbox-frame"></div>
       </main>
 
       <footer class="hud-bottom">
-        <span>ACE-01 · CLASSIFIED OSINT · FIRMS API v1</span>
+        <span>ACE-01 · CLASSIFIED OSINT · FIRMS API v1 · MAPLIBRE</span>
         <span id="clock">—</span>
       </footer>
     </div>
