@@ -3,7 +3,10 @@
 node_modules
 dist
 .DS_Store
-splat/work/
-splat/.venv/
 __pycache__/
 *.pyc
+
+# audio/ (sam-audio exploration)
+audio/sam-audio/
+audio/.venv/
+audio/*.log
