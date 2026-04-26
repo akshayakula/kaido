@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { appendPowerFlowResult, applyGridAgentAllocation, setScenario } from '@/lib/simulation';
-import { addOpenAINegotiationEvent } from '@/lib/openai-agent';
+import { addOpenAINegotiationEvent, runGridAllocatorToolCall } from '@/lib/openai-agent';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
 import { updateSession } from '@/lib/session-store';
 import type { Scenario } from '@/lib/types';
@@ -20,6 +20,7 @@ export async function POST(request: Request, { params }: { params: { sessionId: 
     draft.grid = await solveWithOpenDss(draft, draft.grid);
     appendPowerFlowResult(draft);
     await addOpenAINegotiationEvent(draft, { kind: 'scenario_change' });
+    await runGridAllocatorToolCall(draft, { kind: 'scenario_change' });
   });
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   return NextResponse.json({ session });
