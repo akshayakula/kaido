@@ -2666,6 +2666,8 @@ h2 {
     right: 0;
     top: 0;
     width: calc(100vw - 28px);
+    max-width: calc(100vw - 28px);
+    box-sizing: border-box;
     max-height: none;
     margin: 8px 14px 14px;
     overflow: visible;
@@ -2673,4 +2675,110 @@ h2 {
   .dashboard-screen .map-legend {
     display: none;
   }
+  /* Hide the entire map view on phones — too small to be useful and
+     consumes ~56vh of premium real estate. The cards become the
+     entire dashboard. */
+  .dashboard-screen .map-wrap,
+  .dashboard-screen .franklin-globe-grid,
+  .dashboard-screen .grid-empty,
+  .dashboard-screen .globe-panel {
+    display: none;
+  }
+  .dashboard-screen {
+    background:
+      radial-gradient(circle at 70% 38%, rgba(228, 226, 201, 0.08), transparent 30%),
+      #17170f;
+  }
+  /* Float the cards inline below the topbar on phones */
+  .dashboard-screen .site-card,
+  .dashboard-screen .cylinder-readout,
+  .dashboard-screen .terminal-panel {
+    position: relative;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(100vw - 28px);
+    max-width: calc(100vw - 28px);
+    box-sizing: border-box;
+    margin: 8px 14px;
+  }
+  .dashboard-screen .terminal-panel {
+    max-height: 30vh;
+  }
 }
+
+/* ===========================================================
+   Floating panel chrome (drag handle + collapse)
+   =========================================================== */
+.fp-card {
+  /* Make sure each panel can host its own absolute children but the
+     translate offset for drag still works. */
+  transition: transform 0.18s ease, max-height 0.18s ease, opacity 0.18s ease;
+}
+.fp-card.fp-dragging {
+  transition: none;
+  opacity: 0.92;
+  cursor: grabbing;
+}
+.fp-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 10px;
+  margin: 0 0 6px 0;          /* sit inside the card padding — no bleed */
+  border-bottom: 1px solid var(--line);
+  background: rgba(8, 9, 6, 0.55);
+  backdrop-filter: blur(4px);
+  cursor: grab;
+  user-select: none;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+.fp-card.fp-dragging .fp-bar { cursor: grabbing; }
+.fp-bar .fp-handle {
+  flex: 1;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fp-bar .fp-collapse {
+  min-height: 0;
+  height: 22px;
+  width: 26px;
+  padding: 0;
+  background: rgba(228, 226, 201, 0.06);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 800;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.fp-bar .fp-collapse:hover { border-color: var(--cyan); }
+
+.fp-card.fp-collapsed > *:not(.fp-bar) {
+  display: none !important;
+}
+.fp-card.fp-collapsed {
+  max-height: 32px;
+  min-height: 0 !important;
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Site card lives at top-left and is small; bar sits flush */
+.dashboard-screen .site-card.fp-card { padding-top: 4px; }
+.dashboard-screen .cylinder-readout.fp-card { padding-top: 4px; }
+.dashboard-screen .diagnostics-stack.fp-card { padding-top: 4px; }
+.dashboard-screen .diagnostics-bottom.fp-card { padding-top: 4px; }
+.dashboard-screen .terminal-panel.fp-card { padding-top: 4px; }

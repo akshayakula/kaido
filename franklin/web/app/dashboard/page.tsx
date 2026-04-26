@@ -40,6 +40,116 @@ export default function DashboardPage() {
     return () => window.clearInterval(interval);
   }, [session?.id]);
 
+  // Inject draggable + collapsible chrome onto the floating dashboard cards.
+  // Persists position + collapsed-state per panel in localStorage.
+  useEffect(() => {
+    type Target = { sel: string; label: string; defaultCollapsed?: boolean };
+    const targets: Target[] = [
+      { sel: '.dashboard-screen .cylinder-readout', label: 'Cylinder live read', defaultCollapsed: true },
+      { sel: '.dashboard-screen .diagnostics-stack', label: 'Diagnostics' },
+      { sel: '.dashboard-screen .diagnostics-bottom', label: 'Lower diagnostics', defaultCollapsed: true },
+      { sel: '.dashboard-screen .terminal-panel', label: 'OpenDSS terminal' },
+      { sel: '.dashboard-screen .site-card', label: 'Grid agent' },
+    ];
+
+    const cleanups: Array<() => void> = [];
+    let raf = 0;
+
+    const wire = (target: Target) => {
+      const el = document.querySelector<HTMLElement>(target.sel);
+      if (!el || el.dataset.fpInited) return;
+      el.dataset.fpInited = '1';
+      el.classList.add('fp-card');
+
+      const stored: { x?: number; y?: number; collapsed?: boolean } = (() => {
+        try { return JSON.parse(localStorage.getItem('fp:' + target.sel) || '{}'); }
+        catch { return {}; }
+      })();
+      if (stored.x != null && stored.y != null) {
+        el.style.transform = `translate(${stored.x}px, ${stored.y}px)`;
+      }
+      const startCollapsed = stored.collapsed ?? target.defaultCollapsed ?? false;
+      if (startCollapsed) el.classList.add('fp-collapsed');
+
+      const bar = document.createElement('div');
+      bar.className = 'fp-bar';
+      const handle = document.createElement('div');
+      handle.className = 'fp-handle';
+      handle.textContent = target.label;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fp-collapse';
+      btn.setAttribute('aria-label', 'toggle panel');
+      btn.textContent = el.classList.contains('fp-collapsed') ? '+' : '–';
+      bar.appendChild(handle);
+      bar.appendChild(btn);
+      el.prepend(bar);
+
+      const save = (patch: Partial<{ x: number; y: number; collapsed: boolean }>) => {
+        const cur = (() => {
+          try { return JSON.parse(localStorage.getItem('fp:' + target.sel) || '{}'); }
+          catch { return {}; }
+        })();
+        localStorage.setItem('fp:' + target.sel, JSON.stringify({ ...cur, ...patch }));
+      };
+
+      const onMouseDown = (e: MouseEvent) => {
+        if ((e.target as HTMLElement).closest('.fp-collapse')) return;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const m = el.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+        const baseX = m ? parseFloat(m[1]) : 0;
+        const baseY = m ? parseFloat(m[2]) : 0;
+        el.classList.add('fp-dragging');
+        const onMove = (ev: MouseEvent) => {
+          const x = baseX + (ev.clientX - startX);
+          const y = baseY + (ev.clientY - startY);
+          el.style.transform = `translate(${x}px, ${y}px)`;
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          el.classList.remove('fp-dragging');
+          const mm = el.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+          if (mm) save({ x: parseFloat(mm[1]), y: parseFloat(mm[2]) });
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        e.preventDefault();
+      };
+      bar.addEventListener('mousedown', onMouseDown);
+
+      const onClick = () => {
+        el.classList.toggle('fp-collapsed');
+        const collapsed = el.classList.contains('fp-collapsed');
+        btn.textContent = collapsed ? '+' : '–';
+        save({ collapsed });
+      };
+      btn.addEventListener('click', onClick);
+
+      cleanups.push(() => {
+        bar.removeEventListener('mousedown', onMouseDown);
+        btn.removeEventListener('click', onClick);
+        bar.remove();
+        delete el.dataset.fpInited;
+        el.classList.remove('fp-card', 'fp-collapsed', 'fp-dragging');
+      });
+    };
+
+    // Run after render; the React-rendered cards may not be in the DOM yet
+    // on first effect tick.
+    const tick = () => {
+      targets.forEach(wire);
+      raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      cleanups.forEach((fn) => fn());
+    };
+  }, [session?.id]);
+
   const joinUrl = useMemo(() => {
     if (!session) return '';
     return `${window.location.origin}/join`;
