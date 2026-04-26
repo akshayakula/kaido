@@ -48,9 +48,12 @@ TEMP_THRESHOLD_C   = float(os.environ.get("TEMP_THRESHOLD_C", "2.5"))
 STABLE_WINDOW_S    = float(os.environ.get("STABLE_WINDOW_S", "30"))
 STABLE_STDDEV_C    = float(os.environ.get("STABLE_STDDEV_C", "0.15"))
 
-# Ring renderer to use. "comet" makes Δtemp the dominant visual; "load_audio"
-# is the original 16-LED fill bar with mic flicker.
-RING_MODE          = os.environ.get("RING_MODE", "comet")
+# Ring renderer:
+#   "volcano"    — Δtemp-only: warming erupts particles outward from south,
+#                  cooling rains them inward. Stable = breathing dot at north.
+#   "comet"      — Δtemp-dominant rotating comet with absolute-temp tint.
+#   "load_audio" — original 16-LED fill bar with mic flicker.
+RING_MODE          = os.environ.get("RING_MODE", "volcano")
 
 
 MOCK_BASELINE_C   = float(os.environ.get("MOCK_BASELINE_C", "23.0"))
@@ -250,7 +253,9 @@ def main():
         end = time.monotonic() + seconds
         while time.monotonic() < end:
             now = time.monotonic() - start
-            if RING_MODE == "comet":
+            if RING_MODE == "volcano":
+                ring.render_volcano(strip, viz_delta, viz_mic_level, now)
+            elif RING_MODE == "comet":
                 ring.render_comet(strip, viz_temp_c, viz_delta, viz_mic_level, now)
             else:
                 ring.render_load_audio(strip, viz_delta, temp_threshold_c,

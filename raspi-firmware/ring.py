@@ -397,3 +397,189 @@ def render_comet(strip, temp_c, delta_c, mic_level, t):
     for i, (r, g, b) in enumerate(buf):
         strip.setPixelColor(i, rgb(r, g, b))
     strip.show()
+
+
+# ---------------------------------------------------------------------------
+# Volcano / rain — Δtemp-only renderer.
+#
+# Origin is the south LED (opposite north). On warming, particles erupt
+# outward from south, traveling along both arcs of the ring toward north
+# where they dissipate. On cooling, particles "rain" inward from north
+# back toward south. Spawn rate and travel speed both scale with |Δ|.
+# Stable mode shows a single soft breathing white LED at north.
+# ---------------------------------------------------------------------------
+
+SOUTH_LED = (NORTH_LED + NUM_LEDS // 2) % NUM_LEDS  # = 8 on a 16-LED ring
+ARC_LEN   = NUM_LEDS // 2                            # 8 steps from origin → far side
+
+# (distance_from_origin, age_s, side: -1 CCW / +1 CW, lane: "out" or "in")
+_volcano_state = {
+    "last_t": None,
+    "particles": [],
+    "spawn_acc": 0.0,           # fractional spawns carried across frames
+    "last_sign": 0,
+    "flash_until": 0.0,
+    "flash_color": (0.0, 0.0, 0.0),
+    "sparkles": [],
+}
+
+
+def _delta_to_spawn_rate(delta_c):
+    """Particles per second per side. 0 below the dead zone, ramps up
+       steeply with |Δ|, capped so the ring stays readable."""
+    a = abs(delta_c)
+    if a < 0.1:
+        return 0.0
+    return min(8.0, a * 2.5)
+
+
+def _delta_to_speed(delta_c):
+    """LED-units / second a particle travels."""
+    a = abs(delta_c)
+    return min(16.0, max(2.0, a * 4.0))
+
+
+def _warming_color(progress):
+    """Particle color while erupting outward. progress=0 at origin (white-hot
+       core), 1 at the rim (deep red, fading). Gives a fire/lava vibe."""
+    # white-hot → yellow → orange → red
+    if progress < 0.25:
+        k = progress / 0.25
+        return (1.0, 1.0 - 0.1 * k, 0.85 - 0.45 * k)
+    if progress < 0.6:
+        k = (progress - 0.25) / 0.35
+        return (1.0, 0.9 - 0.5 * k, 0.4 - 0.4 * k)
+    k = (progress - 0.6) / 0.4
+    return (1.0 - 0.15 * k, 0.4 - 0.35 * k, 0.0)
+
+
+def _cooling_color(progress):
+    """Particle color while raining inward. progress=0 at the rim (icy white),
+       1 at origin (deep cobalt). Frost/water vibe."""
+    if progress < 0.25:
+        k = progress / 0.25
+        return (1.0 - 0.4 * k, 1.0 - 0.2 * k, 1.0)
+    if progress < 0.6:
+        k = (progress - 0.25) / 0.35
+        return (0.6 - 0.5 * k, 0.8 - 0.5 * k, 1.0)
+    k = (progress - 0.6) / 0.4
+    return (0.1 - 0.1 * k, 0.3 - 0.25 * k, 1.0 - 0.15 * k)
+
+
+def _add(buf, led, r, g, b):
+    cr, cg, cb = buf[led]
+    buf[led] = (min(1.0, cr + r), min(1.0, cg + g), min(1.0, cb + b))
+
+
+def render_volcano(strip, delta_c, mic_level, t):
+    """Δtemp-first ring renderer. Pure delta — no absolute-temp tint.
+
+    Warming → particles erupt south→north along both arcs (lava).
+    Cooling → particles rain north→south inward (frost).
+    Stable → single dim breathing white LED at north.
+
+    delta_c   — temp drift from baseline (°C). Drives spawn rate, speed,
+                travel direction, and particle color.
+    mic_level — 0..1 microphone activity. Spawns brief white sparkles.
+    t         — monotonic seconds; must increase between calls.
+    """
+    s = _volcano_state
+    last_t = s["last_t"]
+    dt = 0.0 if last_t is None else max(0.0, min(0.2, t - last_t))
+    s["last_t"] = t
+
+    # --- Δ sign reversal flash (blanks any in-flight particles) ---
+    new_sign = 0 if abs(delta_c) < 0.1 else (1 if delta_c > 0 else -1)
+    if new_sign != 0 and s["last_sign"] != 0 and new_sign != s["last_sign"]:
+        s["flash_until"] = t + 0.30
+        s["flash_color"] = (1.0, 0.6, 0.2) if new_sign > 0 else (0.4, 0.7, 1.0)
+        s["particles"] = []  # clear stale particles from the old direction
+        s["spawn_acc"] = 0.0
+    s["last_sign"] = new_sign
+
+    speed = _delta_to_speed(delta_c)            # LED-units/sec
+    spawn_per_sec = _delta_to_spawn_rate(delta_c)  # per side
+
+    # --- spawn new particles (CW + CCW symmetrically) ---
+    if spawn_per_sec > 0 and dt > 0:
+        s["spawn_acc"] += spawn_per_sec * dt
+        while s["spawn_acc"] >= 1.0:
+            s["spawn_acc"] -= 1.0
+            for side in (+1, -1):
+                # warming: start at distance 0; cooling: start at distance ARC_LEN
+                start_dist = 0.0 if delta_c > 0 else float(ARC_LEN)
+                s["particles"].append([start_dist, 0.0, side])
+
+    # --- advance + render particles ---
+    buf = [(0.0, 0.0, 0.0) for _ in range(NUM_LEDS)]
+    alive = []
+    for p in s["particles"]:
+        dist, age, side = p
+        # outward (warming) increases dist; inward (cooling) decreases
+        if delta_c > 0:
+            dist += speed * dt
+            if dist >= ARC_LEN + 0.5:
+                continue
+            progress = dist / ARC_LEN
+            cr, cg, cb = _warming_color(min(1.0, progress))
+        else:
+            dist -= speed * dt
+            if dist <= -0.5:
+                continue
+            progress = 1.0 - (dist / ARC_LEN)
+            cr, cg, cb = _cooling_color(min(1.0, max(0.0, progress)))
+        age += dt
+
+        # Brightness: bright at "fresh" end, fades along the path. Combined
+        # with a head/tail soft anti-aliased deposit so the particle reads as
+        # a glowing blob spanning ~2 LEDs rather than a hard pixel jump.
+        body_lvl = max(0.0, 1.0 - progress * 0.85)
+        head_int = math.floor(dist)
+        frac = dist - head_int
+        # head pixel
+        led_a = (SOUTH_LED + side * head_int) % NUM_LEDS
+        _add(buf, led_a, cr * body_lvl * (1.0 - frac), cg * body_lvl * (1.0 - frac), cb * body_lvl * (1.0 - frac))
+        # next pixel along the path
+        led_b = (SOUTH_LED + side * (head_int + 1)) % NUM_LEDS
+        _add(buf, led_b, cr * body_lvl * frac, cg * body_lvl * frac, cb * body_lvl * frac)
+        # short trail behind
+        for back in range(1, 3):
+            tail_dist = head_int - back
+            if 0 <= tail_dist <= ARC_LEN:
+                tail_lvl = body_lvl * (0.55 / back)
+                led_t = (SOUTH_LED + side * tail_dist) % NUM_LEDS
+                _add(buf, led_t, cr * tail_lvl, cg * tail_lvl, cb * tail_lvl)
+
+        p[0], p[1] = dist, age
+        alive.append(p)
+    s["particles"] = alive
+
+    # --- stable mode: soft white breathing pixel at north ---
+    if spawn_per_sec == 0 and not alive and t >= s["flash_until"]:
+        breathe = 0.30 + 0.18 * math.sin(t * 1.5)
+        _add(buf, NORTH_LED, breathe, breathe, breathe * 0.95)
+
+    # --- mic sparkles (additive white) ---
+    rate = 30.0 * mic_level
+    if rate > 0 and dt > 0 and random.random() < rate * dt:
+        s["sparkles"].append((random.randint(0, NUM_LEDS - 1), t))
+    fresh_sparkles = []
+    for led, spawn_t in s["sparkles"]:
+        age = t - spawn_t
+        if age >= 0.25:
+            continue
+        fresh_sparkles.append((led, spawn_t))
+        lvl = 1.0 - age / 0.25
+        _add(buf, led, lvl, lvl, lvl)
+    s["sparkles"] = fresh_sparkles
+
+    # --- Δ-sign reversal flash overlay ---
+    if t < s["flash_until"]:
+        remaining = (s["flash_until"] - t) / 0.30
+        fr, fg, fb = s["flash_color"]
+        for i in range(NUM_LEDS):
+            _add(buf, i, fr * remaining, fg * remaining, fb * remaining)
+
+    for i, (r, g, b) in enumerate(buf):
+        strip.setPixelColor(i, rgb(r, g, b))
+    strip.show()
