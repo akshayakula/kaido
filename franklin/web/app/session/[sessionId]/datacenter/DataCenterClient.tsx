@@ -90,37 +90,35 @@ export function DataCenterClient() {
     }
     const data = (await response.json()) as { session: DemoSession };
     setSession(data.session);
-    // If our DC disappeared (operator delete or session reseed), transparently
-    // re-register with the saved name and update the URL + localStorage.
-    const stillExists = data.session.datacenters.some((dc) => dc.id === liveDcId.current);
-    if (!stillExists && !reconnectInFlight.current) {
-      reconnectInFlight.current = true;
-      setReconnecting(true);
-      try {
-        const saved = loadJoinIdentity(params.sessionId);
-        const displayName = saved?.displayName;
-        const r = await fetch(`/api/sessions/${params.sessionId}/datacenters`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ displayName }),
-        });
-        if (r.ok) {
-          const j = (await r.json()) as { datacenterId: string; session: DemoSession };
-          saveJoinIdentity(params.sessionId, j.datacenterId, displayName);
-          liveDcId.current = j.datacenterId;
-          setDatacenterId(j.datacenterId);
-          setSession(j.session);
-          // Replace URL so a refresh keeps the new id without a server roundtrip.
-          if (typeof window !== 'undefined') {
-            const url = new URL(window.location.href);
-            url.searchParams.set('dc', j.datacenterId);
-            window.history.replaceState(null, '', url.toString());
-          }
+  }
+
+  async function manualRejoin() {
+    if (reconnectInFlight.current) return;
+    reconnectInFlight.current = true;
+    setReconnecting(true);
+    try {
+      const saved = loadJoinIdentity(params.sessionId);
+      const displayName = saved?.displayName;
+      const r = await fetch(`/api/sessions/${params.sessionId}/datacenters`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ displayName }),
+      });
+      if (r.ok) {
+        const j = (await r.json()) as { datacenterId: string; session: DemoSession };
+        saveJoinIdentity(params.sessionId, j.datacenterId, displayName);
+        liveDcId.current = j.datacenterId;
+        setDatacenterId(j.datacenterId);
+        setSession(j.session);
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.searchParams.set('dc', j.datacenterId);
+          window.history.replaceState(null, '', url.toString());
         }
-      } finally {
-        reconnectInFlight.current = false;
-        setReconnecting(false);
       }
+    } finally {
+      reconnectInFlight.current = false;
+      setReconnecting(false);
     }
   }
 
@@ -175,11 +173,12 @@ export function DataCenterClient() {
 
       {!datacenter ? (
         <section className="panel empty-state">
-          {reconnecting
-            ? 'Reconnecting to the grid…'
-            : session
-              ? 'Reconnecting…'
-              : 'Loading session…'}
+          <p>{session ? 'Your data center is no longer in the session.' : 'Loading session…'}</p>
+          {session && (
+            <button type="button" onClick={manualRejoin} disabled={reconnecting}>
+              {reconnecting ? 'Reconnecting…' : 'Reconnect as a new data center'}
+            </button>
+          )}
         </section>
       ) : (
         <section className="phone-grid">
