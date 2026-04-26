@@ -84,6 +84,19 @@ export function DataCenterClient() {
     if (liveDc) return liveDc;
     if (!datacenterId) return undefined;
     const saved = loadJoinIdentity(params.sessionId);
+    // Pull the most recent broadcast from the grid agent so the status card
+    // reflects the actual feeder posture, not a placeholder string.
+    const latestBroadcast = session?.events.find(
+      (e) =>
+        (e.from === 'grid-agent' && (e.to === 'data-center-agents' || e.type === 'POWER_FLOW_RESULT')) ||
+        e.type === 'REQUEST_RELIEF',
+    );
+    const fallbackInstruction = latestBroadcast?.body
+      ?? (session?.grid.health === 'emergency'
+        ? 'Grid emergency — broadcast pending.'
+        : session?.grid.health === 'stressed'
+          ? 'Grid stressed — relief negotiation in progress.'
+          : 'Grid nominal.');
     return {
       id: datacenterId,
       name: saved?.displayName || 'Data center',
@@ -102,10 +115,10 @@ export function DataCenterClient() {
       batterySoc: 0.72,
       batterySupportKw: 0,
       priority: 0.5,
-      lastInstruction: 'Connecting to grid…',
+      lastInstruction: fallbackInstruction,
       slurm: undefined,
     } as unknown as DataCenterAgent;
-  }, [liveDc, datacenterId, params.sessionId]);
+  }, [liveDc, datacenterId, params.sessionId, session]);
 
   async function refresh() {
     let response = await fetch(`/api/sessions/${params.sessionId}/state`);
