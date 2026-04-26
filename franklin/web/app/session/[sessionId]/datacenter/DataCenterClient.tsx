@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import type { DataCenterAgent, DemoSession, RequestType } from '@/lib/types';
+import { clearJoinIdentity, saveJoinIdentity } from '@/lib/joinIdentity';
 
 const requests: { type: RequestType; label: string; detail: string }[] = [
   { type: 'standard_inference', label: 'Standard inference', detail: 'Normal chat traffic' },
@@ -14,24 +15,57 @@ const requests: { type: RequestType; label: string; detail: string }[] = [
 export function DataCenterClient() {
   const params = useParams<{ sessionId: string }>();
   const search = useSearchParams();
+  const router = useRouter();
   const [session, setSession] = useState<DemoSession | null>(null);
   const [busy, setBusy] = useState<RequestType | null>(null);
   const [chatMessage, setChatMessage] = useState('');
   const datacenterId = search.get('dc') ?? '';
 
   useEffect(() => {
-    const cached = window.sessionStorage.getItem(`joined:${params.sessionId}:${datacenterId}`);
+    if (params.sessionId && datacenterId) {
+      saveJoinIdentity(params.sessionId, datacenterId);
+    }
+    // Hydrate from local snapshot (localStorage outlives the tab; sessionStorage
+    // is the legacy backup written by older joins).
+    const localKey = `joined:${params.sessionId}:${datacenterId}`;
+    const cached =
+      window.localStorage.getItem(localKey) ??
+      window.sessionStorage.getItem(localKey);
     if (cached) {
       try {
         setSession(JSON.parse(cached) as DemoSession);
       } catch {
-        window.sessionStorage.removeItem(`joined:${params.sessionId}:${datacenterId}`);
+        window.localStorage.removeItem(localKey);
+        window.sessionStorage.removeItem(localKey);
       }
     }
     const interval = window.setInterval(refresh, 1000);
     refresh();
     return () => window.clearInterval(interval);
   }, [datacenterId, params.sessionId]);
+
+  // Persist a fresh snapshot whenever the live session changes so that a
+  // refresh shows our DC immediately, before the next poll lands.
+  useEffect(() => {
+    if (!session || !datacenterId) return;
+    try {
+      window.localStorage.setItem(
+        `joined:${params.sessionId}:${datacenterId}`,
+        JSON.stringify(session),
+      );
+    } catch { /* quota — ignore */ }
+  }, [session, datacenterId, params.sessionId]);
+
+  function leaveSession() {
+    if (params.sessionId && datacenterId) {
+      clearJoinIdentity(params.sessionId);
+      try {
+        window.localStorage.removeItem(`joined:${params.sessionId}:${datacenterId}`);
+        window.sessionStorage.removeItem(`joined:${params.sessionId}:${datacenterId}`);
+      } catch { /* ignore */ }
+    }
+    router.push('/join');
+  }
 
   const datacenter = useMemo<DataCenterAgent | undefined>(
     () => session?.datacenters.find((dc) => dc.id === datacenterId),
@@ -88,7 +122,9 @@ export function DataCenterClient() {
         </div>
         <div className="hero-actions">
           <a className="secondary-link" href="/readouts">Readouts</a>
-          <a className="secondary-link" href="/join">Switch session</a>
+          <button type="button" className="secondary-link" onClick={leaveSession}>
+            Leave &amp; clear local
+          </button>
         </div>
       </header>
 
