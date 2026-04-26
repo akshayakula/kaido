@@ -100,8 +100,9 @@ export default function DashboardPage() {
     <main className="shell dashboard">
       <header className="hero">
         <div>
-          <p className="eyebrow">OpenDSS Agent Demo</p>
-          <h1>Grid agent negotiates with live data-center agents</h1>
+          <p className="eyebrow">OpenDSS Agent Demo · Franklin Grid Sense</p>
+          <h1>FRANKLIN GRID</h1>
+          <p className="hero-copy">A live operator console where data-center agents negotiate inference load against an OpenDSS-backed distribution grid.</p>
         </div>
         <div className="hero-actions">
           <a className="secondary-link" href="/join">Join page</a>
