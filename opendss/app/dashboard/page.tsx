@@ -90,6 +90,10 @@ export default function DashboardPage() {
     }
   }
 
+  const drawLevel = session ? getDrawLevel(session) : 'waiting';
+  const voltageTone =
+    !session ? 'waiting' : session.grid.health === 'normal' ? 'steady' : session.grid.health === 'stressed' ? 'strained' : 'critical';
+
   return (
     <main className="shell dashboard">
       <header className="hero">
@@ -125,9 +129,9 @@ export default function DashboardPage() {
             <small>{session ? 'Default shared session' : 'Loading default session'}</small>
           </section>
           <section className="metrics">
-            <Metric label="Voltage min" value={session ? `${session.grid.voltageMin.toFixed(3)} pu` : '-'} />
-            <Metric label="Max loading" value={session ? `${Math.round(session.grid.lineLoadingMax * 100)}%` : '-'} />
-            <Metric label="Reserve" value={session ? `${Math.round(session.grid.reserveKw)} kW` : '-'} />
+            <Metric label="Grid health" value={voltageTone} />
+            <Metric label="Relative draw" value={drawLevel} />
+            <Metric label="Headroom" value={session ? (session.grid.reserveKw > 1600 ? 'ample' : session.grid.reserveKw > 700 ? 'tight' : 'thin') : '-'} />
             <Metric label="Data centers" value={session ? String(session.datacenters.length) : '-'} />
           </section>
           <section className="join-card">
@@ -231,4 +235,16 @@ export default function DashboardPage() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <div className="metric"><span>{label}</span><b>{value}</b></div>;
+}
+
+function getDrawLevel(session: DemoSession) {
+  if (!session.datacenters.length) return 'idle';
+  const averageDraw =
+    session.datacenters.reduce((sum, dc) => {
+      const allocated = dc.slurm?.allocatedGpus ?? Math.round(dc.actualUtilization * dc.gpuCount);
+      return sum + Math.max(dc.actualUtilization, allocated / Math.max(1, dc.gpuCount));
+    }, 0) / session.datacenters.length;
+  if (averageDraw > 0.68) return 'heavy';
+  if (averageDraw > 0.36) return 'moderate';
+  return 'light';
 }
