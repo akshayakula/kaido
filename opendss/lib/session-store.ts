@@ -17,6 +17,7 @@ const redis =
 
 export async function saveSession(session: DemoSession) {
   session.updatedAt = Date.now();
+  memory.set(session.id, { session: structuredClone(session), expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000 });
   if (redis) {
     try {
       await redis.set(sessionKey(session.id), session, { ex: SESSION_TTL_SECONDS });
@@ -26,20 +27,25 @@ export async function saveSession(session: DemoSession) {
       console.warn('Redis unavailable; saving session in memory.', error);
     }
   }
-  memory.set(session.id, { session: structuredClone(session), expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000 });
 }
 
 export async function getSession(id: string) {
+  cleanupMemory();
+  const cached = memory.get(id)?.session;
+  if (cached) return normalizeSession(structuredClone(cached));
+
   if (redis) {
     try {
       const session = await redis.get<DemoSession>(sessionKey(id));
-      return session ? normalizeSession(session) : null;
+      if (!session) return null;
+      const normalized = normalizeSession(session);
+      memory.set(id, { session: structuredClone(normalized), expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000 });
+      return normalized;
     } catch (error) {
       console.warn('Redis unavailable; reading session from memory.', error);
     }
   }
-  cleanupMemory();
-  return memory.get(id)?.session ? normalizeSession(structuredClone(memory.get(id)!.session)) : null;
+  return null;
 }
 
 export async function getOrCreateDefaultSession() {

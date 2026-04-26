@@ -20,10 +20,18 @@ export function DataCenterClient() {
   const datacenterId = search.get('dc') ?? '';
 
   useEffect(() => {
+    const cached = window.sessionStorage.getItem(`joined:${params.sessionId}:${datacenterId}`);
+    if (cached) {
+      try {
+        setSession(JSON.parse(cached) as DemoSession);
+      } catch {
+        window.sessionStorage.removeItem(`joined:${params.sessionId}:${datacenterId}`);
+      }
+    }
     const interval = window.setInterval(refresh, 1000);
     refresh();
     return () => window.clearInterval(interval);
-  }, [params.sessionId]);
+  }, [datacenterId, params.sessionId]);
 
   const datacenter = useMemo<DataCenterAgent | undefined>(
     () => session?.datacenters.find((dc) => dc.id === datacenterId),

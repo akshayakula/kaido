@@ -36,12 +36,20 @@ export function JoinClient() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ displayName }),
       });
-      const data = (await response.json().catch(() => ({}))) as { sessionId?: string; datacenterId?: string; error?: string };
+      const data = (await response.json().catch(() => ({}))) as {
+        sessionId?: string;
+        datacenterId?: string;
+        session?: unknown;
+        error?: string;
+      };
       if (!response.ok || !data.sessionId || !data.datacenterId) {
         setError(data.error || 'Could not join the default grid session.');
         return;
       }
       window.localStorage.setItem(`dc:${data.sessionId}`, data.datacenterId);
+      if ('session' in data) {
+        window.sessionStorage.setItem(`joined:${data.sessionId}:${data.datacenterId}`, JSON.stringify(data.session));
+      }
       const destination = `/session/${data.sessionId}/datacenter?dc=${data.datacenterId}`;
       router.push(destination);
       window.location.assign(destination);
