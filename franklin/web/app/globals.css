@@ -2943,3 +2943,24 @@ h2 {
   border-color: rgba(52, 211, 153, 0.55);
   box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.18);
 }
+
+/* When the two inner lower-grid panels are wired as independent
+   floating windows, give each a translucent backdrop so they read
+   like separate cards rather than two halves of one block. */
+.dashboard-screen .gpu-scheduler-panel.fp-card,
+.dashboard-screen .negotiation-panel.fp-card {
+  background-color: rgba(23, 23, 15, 0.62);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(228, 226, 201, 0.18);
+}
+.dashboard-screen .gpu-scheduler-panel.fp-card.fp-collapsed,
+.dashboard-screen .negotiation-panel.fp-card.fp-collapsed {
+  /* Don't let the grid stretch a collapsed panel back open */
+  align-self: start;
+}
+
+/* When both inner panels are collapsed, the outer .diagnostics-bottom
+   shouldn't occupy a giant 314 px tall block. Let the grid auto-size. */
+.dashboard-screen .lower-grid.diagnostics-bottom {
+  align-items: start;
+}

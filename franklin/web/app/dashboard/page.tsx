@@ -45,11 +45,12 @@ export default function DashboardPage() {
   useEffect(() => {
     type Target = { sel: string; label: string; defaultCollapsed?: boolean };
     const targets: Target[] = [
-      { sel: '.dashboard-screen .cylinder-readout', label: 'Cylinder live read', defaultCollapsed: true },
-      { sel: '.dashboard-screen .diagnostics-stack', label: 'Diagnostics' },
-      { sel: '.dashboard-screen .diagnostics-bottom', label: 'Lower diagnostics', defaultCollapsed: true },
-      { sel: '.dashboard-screen .terminal-panel', label: 'OpenDSS terminal' },
-      { sel: '.dashboard-screen .site-card', label: 'Grid agent' },
+      { sel: '.dashboard-screen .cylinder-readout',     label: 'Cylinder live read',  defaultCollapsed: true },
+      { sel: '.dashboard-screen .diagnostics-stack',    label: 'Diagnostics' },
+      { sel: '.dashboard-screen .gpu-scheduler-panel',  label: 'GPU scheduler',       defaultCollapsed: true },
+      { sel: '.dashboard-screen .negotiation-panel',    label: 'Agent conversation',  defaultCollapsed: true },
+      { sel: '.dashboard-screen .terminal-panel',       label: 'OpenDSS terminal' },
+      { sel: '.dashboard-screen .site-card',            label: 'Grid agent' },
     ];
 
     const cleanups: Array<() => void> = [];
@@ -284,7 +285,7 @@ export default function DashboardPage() {
       </section>
 
       <section className="lower-grid diagnostics-bottom">
-        <section className="panel">
+        <section className="panel gpu-scheduler-panel">
           <div className="panel-head compact">
             <div>
               <p className="eyebrow">Data-center agents</p>
