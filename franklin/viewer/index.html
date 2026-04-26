@@ -169,21 +169,19 @@
     <button id="run-btn">▶ run popping</button>
     <button id="clear-btn" class="ghost" title="delete current source (local + remote)">× clear</button>
   </div>
-  <nav id="prompts"></nav>
 </aside>
 
 <main>
   <div class="topbar">
     <div class="title">
-      <strong id="cur-prompt">—</strong>
-      <small id="cur-cls">—</small>
+      <strong>popping isolation</strong>
+      <small id="cur-source">—</small>
     </div>
     <div class="controls">
-      <button id="play-input">▸ input</button>
-      <button id="play-target" class="primary">▸ target</button>
-      <button id="play-residual">▸ residual</button>
-      <button id="play-all">▶ all sync</button>
-      <span style="color:var(--muted);margin-left:8px"><kbd>space</kbd> all · <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> solo</span>
+      <button id="play-input">▸ original</button>
+      <button id="play-target" class="primary">▸ popping</button>
+      <button id="play-all">▶ both sync</button>
+      <span style="color:var(--muted);margin-left:8px"><kbd>space</kbd> sync · <kbd>1</kbd> orig · <kbd>2</kbd> pop</span>
     </div>
   </div>
 
@@ -209,80 +207,24 @@
 import WaveSurfer from 'https://esm.sh/wavesurfer.js@7.10.1';
 import Spectrogram from 'https://esm.sh/wavesurfer.js@7.10.1/dist/plugins/spectrogram.esm.js';
 
-const HEALTH = [
-  ["transformer hum",      "core_magnetostriction"],
-  ["electrical hum",       "core_magnetostriction"],
-  ["low frequency drone",  "core_120hz_harmonic"],
-  ["60 hz hum",            "core_fundamental"],
-  ["cooling fan",          "fan_normal"],
-];
-const FAULTS = [
-  ["popping",              "partial_discharge",        "Partial discharge / arcing"],
-  ["electrical pop",       "partial_discharge",        "Partial discharge / arcing"],
-  ["crackling",            "partial_discharge_corona", "Partial discharge / arcing"],
-  ["arcing",               "arcing",                   "Partial discharge / arcing"],
-  ["electrical zap",       "arcing",                   "Partial discharge / arcing"],
-  ["zap",                  "arcing",                   "Partial discharge / arcing"],
-  ["snapping",             "spark_gap",                "Partial discharge / arcing"],
-  ["clicking",             "tap_changer_mechanical",   "Mechanical wear"],
-  ["clunking",             "tap_changer_wear",         "Mechanical wear"],
-  ["rattling",             "loose_lamination",         "Mechanical wear"],
-  ["buzzing",              "loose_winding_or_corona",  "Mechanical wear"],
-  ["pump cavitation",      "oil_pump_cavitation",      "Cooling / oil"],
-  ["water dripping",       "oil_leak",                 "Cooling / oil"],
-  ["hissing",              "gas_leak_or_bushing",      "Cooling / oil"],
-  ["wind",                 "ambient_subtract",         "Ambient (subtract)"],
-  ["traffic",              "ambient_subtract",         "Ambient (subtract)"],
-  ["birds",                "ambient_subtract",         "Ambient (subtract)"],
-  ["speech",               "ambient_subtract",         "Ambient (subtract)"],
-];
-const ALL_PROMPTS = [...HEALTH.map(r => r[0]), ...FAULTS.map(r => r[0])];
-// What we actually run by default — the popping/impulsive signatures.
 const RUN_PROMPTS = ["popping"];
+const PROMPT = "popping";
 const safe = p => p.replace(/ /g, "_").replace(/\//g, "-");
 const fmt = s => `${Math.floor(s/60)}:${(s%60).toFixed(1).padStart(4,"0")}`;
 
 let sources = [];           // [{name, files}]
 let curSource = null;
-let curPrompt = HEALTH[0][0];
-let curCls    = HEALTH[0][1];
 let lanes = {};
-let syncing = false;
-
-function buildSidebar(){
-  const root = document.getElementById("prompts");
-  root.innerHTML = "";
-
-  const hg = document.createElement("section"); hg.className = "group";
-  hg.innerHTML = `<h2 class="health">health · expected</h2>`;
-  for (const [p,c] of HEALTH) hg.appendChild(promptEl(p,c,"health"));
-  root.appendChild(hg);
-
-  const grouped = {};
-  for (const [p,c,cat] of FAULTS) (grouped[cat] ||= []).push([p,c]);
-  for (const [cat, items] of Object.entries(grouped)){
-    const g = document.createElement("section"); g.className = "group";
-    g.innerHTML = `<h2 class="fault">${cat}</h2>`;
-    for (const [p,c] of items) g.appendChild(promptEl(p,c,"fault"));
-    root.appendChild(g);
-  }
-}
-
-function promptEl(prompt, cls, kind){
-  const d = document.createElement("div"); d.className = "prompt"; d.dataset.prompt = prompt;
-  d.innerHTML = `<span class="text">${prompt}</span><span class="cls">${cls}</span>`;
-  d.addEventListener("click", () => selectPrompt(prompt, cls));
-  return d;
-}
 
 function buildStack(){
   const stack = document.getElementById("stack");
   stack.innerHTML = "";
-  for (const role of ["input","target","residual"]){
+  const labels = { input: "original", target: "popping (isolated)" };
+  for (const role of ["input","target"]){
     const lane = document.createElement("div"); lane.className = `lane ${role}`;
     lane.innerHTML = `
       <header>
-        <div class="name">${role}</div>
+        <div class="name">${labels[role]}</div>
         <div class="meta" id="meta-${role}">—</div>
       </header>
       <div class="ws-spec" id="spec-${role}"></div>
@@ -300,7 +242,6 @@ function makeLane(role, url){
   const colors = {
     input:    { wave: "#94a3b8", progress: "#cbd5e1", cm: "roseus" },
     target:   { wave: "#34d399", progress: "#a7f3d0", cm: "roseus" },
-    residual: { wave: "#60a5fa", progress: "#bfdbfe", cm: "gray"   },
   };
   const c = colors[role];
   const ws = WaveSurfer.create({
@@ -369,25 +310,22 @@ async function safePlay(ws){
   catch (err) { console.warn("play rejected", ws._role, err); }
 }
 
-function selectPrompt(prompt, cls){
-  curPrompt = prompt; curCls = cls;
-  document.querySelectorAll(".prompt").forEach(el => el.classList.toggle("active", el.dataset.prompt === prompt));
-  document.getElementById("cur-prompt").textContent = `"${prompt}"`;
-  document.getElementById("cur-cls").textContent = cls;
-
+function loadSource(){
   destroyLanes();
   buildStack();
-  if (!curSource) return;
+  if (!curSource){
+    document.getElementById("cur-source").textContent = "—";
+    return;
+  }
+  document.getElementById("cur-source").textContent = curSource;
   const base = `/work/${curSource}`;
   const src = sources.find(s => s.name === curSource);
   const inputName = (src?.files || []).find(f => f.startsWith("input."));
   if (inputName) lanes.input = makeLane("input", `${base}/${inputName}`);
-  const tgtFile = (src?.files || []).find(f => f === `target__${safe(prompt)}.wav`);
-  const resFile = (src?.files || []).find(f => f === `residual__${safe(prompt)}.wav`);
-  if (tgtFile) lanes.target   = makeLane("target",   `${base}/${tgtFile}`);
+  else missingLane("input");
+  const tgtFile = (src?.files || []).find(f => f === `target__${safe(PROMPT)}.wav`);
+  if (tgtFile) lanes.target = makeLane("target", `${base}/${tgtFile}`);
   else missingLane("target");
-  if (resFile) lanes.residual = makeLane("residual", `${base}/${resFile}`);
-  else missingLane("residual");
 }
 
 function missingLane(role){
@@ -428,7 +366,7 @@ async function loadSources(preferred){
 function selectSource(name){
   curSource = name;
   document.querySelectorAll(".src-item").forEach(el => el.classList.toggle("active", el.dataset.src === name));
-  selectPrompt(curPrompt, curCls);
+  loadSource();
 }
 
 // upload
@@ -507,7 +445,6 @@ document.getElementById("clear-btn").addEventListener("click", async () => {
 });
 document.getElementById("play-input").addEventListener("click", () => solo("input"));
 document.getElementById("play-target").addEventListener("click", () => solo("target"));
-document.getElementById("play-residual").addEventListener("click", () => solo("residual"));
 document.getElementById("play-all").addEventListener("click", playAllSync);
 document.getElementById("vol").addEventListener("input", e => {
   const v = parseFloat(e.target.value);
@@ -525,11 +462,9 @@ document.addEventListener("keydown", e => {
   if (e.code === "Space")        { e.preventDefault(); playAllSync(); }
   else if (e.key === "1")        { solo("input"); }
   else if (e.key === "2")        { solo("target"); }
-  else if (e.key === "3")        { solo("residual"); }
   else if (e.key === "p" || e.key === "P") { pauseAll(); }
 });
 
-buildSidebar();
 loadSources();
 </script>
 </body>

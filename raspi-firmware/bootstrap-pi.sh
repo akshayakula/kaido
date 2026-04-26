@@ -37,7 +37,10 @@ echo "--- apt packages"
 sudo apt-get update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     python3 python3-pip python3-rpi.gpio i2c-tools \
-    python3-smbus2 python3-requests python3-rpi-ws281x
+    python3-requests python3-setuptools
+
+echo "--- pip packages (rpi_ws281x not in apt on Bookworm)"
+sudo pip3 install --break-system-packages rpi_ws281x smbus2
 
 echo "--- enabling I2C + disabling onboard audio (NeoPixel needs PWM0)"
 CONFIG=/boot/firmware/config.txt
