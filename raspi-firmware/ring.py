@@ -291,24 +291,29 @@ def _delta_to_tail_length(delta_c):
 
 
 def _delta_to_color(delta_c):
-    """Warming = red, cooling = blue, near-stable = white. Saturation grows
-    with magnitude so small drifts read as washed-out, big drifts pop."""
+    """Warming = ember red, cooling = icy pale blue, magnitude pushes toward
+    saturation. At small Δ the color is washed-out (whitish); at big Δ it
+    pops. Cooling palette is pale/icy rather than navy so it reads as frost."""
     a = abs(delta_c)
     sat = max(0.0, min(1.0, a / 2.0))   # 0 at 0, 1 at ±2 °C and beyond
     if delta_c >= 0:
-        # red, with white mixed in at low magnitudes
+        # Red, with white mixed in at low magnitudes (warm ember).
         return (1.0, 0.18 * (1.0 - sat), 0.10 * (1.0 - sat))
-    return (0.10 * (1.0 - sat), 0.30 * (1.0 - sat), 1.0)
+    # Icy: pale white-cyan at small drift, deeper cobalt-ice at full magnitude.
+    return (0.55 - 0.40 * sat, 0.85 - 0.35 * sat, 1.0)
 
 
 def _spawn_sparkles(mic_level, t, dt):
-    """Maybe add new sparkles based on mic_level. Each frame, with probability
-    proportional to mic_level * dt * spawn_rate, spawn at most one."""
-    spawn_rate = 30.0 * mic_level         # ~30 sparkles/s when mic saturated
-    if spawn_rate <= 0:
+    """Maybe add new sparkles based on mic_level. A short dead-zone at low
+    levels and a much lower rate scalar make the LED less twitchy without
+    touching the firmware-side mic measurement itself."""
+    if mic_level < 0.20:
+        return                                # ignore room noise floor
+    # ~10 sparkles/s when mic saturated (was 30/s — felt over-eager).
+    effective = (mic_level - 0.20) / 0.80     # remap 0.20..1.0 → 0..1
+    spawn_rate = 10.0 * effective
+    if spawn_rate <= 0 or dt <= 0:
         return
-    # Probability of at least one in this dt ≈ 1 - exp(-rate*dt); for small
-    # dt just use rate*dt linearly.
     if random.random() < spawn_rate * dt:
         led = random.randint(0, NUM_LEDS - 1)
         _comet_state["sparkles"].append((led, t))
@@ -391,7 +396,7 @@ def render_comet(strip, _unused, delta_c, mic_level, t):
         if delta_c > 0:
             anchor = (peak, peak * 0.30, peak * 0.05)        # ember
         else:
-            anchor = (peak * 0.05, peak * 0.55, peak)        # icy
+            anchor = (peak * 0.45, peak * 0.85, peak)        # icy pale blue
         spread = 1 + int(round(mag * 3))
     _add(buf, SOUTH_LED, *anchor)
     for d in range(1, spread + 1):
@@ -627,7 +632,7 @@ def render_volcano(strip, delta_c, mic_level, t):
         if delta_c > 0:
             core_r, core_g, core_b = peak, peak * 0.30, peak * 0.05  # ember
         else:
-            core_r, core_g, core_b = peak * 0.05, peak * 0.55, peak  # icy cyan
+            core_r, core_g, core_b = peak * 0.45, peak * 0.85, peak  # icy pale blue
         spread = 1 + int(round(mag * 3))        # 1..4 LEDs each side
 
     _add(buf, SOUTH_LED, core_r, core_g, core_b)
