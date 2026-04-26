@@ -107,9 +107,9 @@ export function DataCenterClient() {
           <section className="metrics tall">
             <Metric label="GPU use" value={`${Math.round(datacenter.actualUtilization * 100)}%`} />
             <Metric label="Scheduler cap" value={`${Math.round(datacenter.schedulerCap * 100)}%`} />
-            <Metric label="Slurm state" value={datacenter.slurm.state} />
-            <Metric label="Jobs" value={`${datacenter.slurm.runningJobs} run / ${datacenter.slurm.pendingJobs} pend`} />
-            <Metric label="Allocated GPUs" value={`${datacenter.slurm.allocatedGpus}/${datacenter.gpuCount}`} />
+            <Metric label="Slurm state" value={datacenter.slurm?.state ?? 'normal'} />
+            <Metric label="Jobs" value={`${datacenter.slurm?.runningJobs ?? 0} run / ${datacenter.slurm?.pendingJobs ?? 0} pend`} />
+            <Metric label="Allocated GPUs" value={`${datacenter.slurm?.allocatedGpus ?? Math.round(datacenter.actualUtilization * datacenter.gpuCount)}/${datacenter.gpuCount}`} />
             <Metric label="Latency" value={`${datacenter.latencyMs} ms`} />
             <Metric label="Battery" value={`${Math.round(datacenter.batterySoc * 100)}%`} />
             <Metric label="Grid support" value={`${Math.round(datacenter.batterySupportKw)} kW`} />
@@ -117,14 +117,14 @@ export function DataCenterClient() {
 
           <section className="panel slurm-panel">
             <p className="eyebrow">Mock Slurm</p>
-            <h2>{datacenter.slurm.partition} partition</h2>
+            <h2>{datacenter.slurm?.partition ?? 'inference'} partition</h2>
             <div className="slurm-grid">
-              <span>held jobs <b>{datacenter.slurm.heldJobs}</b></span>
-              <span>completed <b>{datacenter.slurm.completedJobs}</b></span>
-              <span>backfill <b>{datacenter.slurm.backfillWindowMinutes}m</b></span>
-              <span>preemptions <b>{datacenter.slurm.preemptions}</b></span>
+              <span>held jobs <b>{datacenter.slurm?.heldJobs ?? 0}</b></span>
+              <span>completed <b>{datacenter.slurm?.completedJobs ?? 0}</b></span>
+              <span>backfill <b>{datacenter.slurm?.backfillWindowMinutes ?? 0}m</b></span>
+              <span>preemptions <b>{datacenter.slurm?.preemptions ?? 0}</b></span>
             </div>
-            <p className="slurm-reason">{datacenter.slurm.reason}</p>
+            <p className="slurm-reason">{datacenter.slurm?.reason ?? 'Scheduler state is initializing.'}</p>
           </section>
 
           <section className="panel">

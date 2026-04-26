@@ -83,25 +83,31 @@ export function createDataCenter(session: DemoSession, displayName?: string): Da
     batterySupportKw: 0,
     priority: 0.45 + (n % 5) * 0.1,
     lastInstruction: 'Admitted to grid negotiation loop.',
-    slurm: {
-      state: 'normal',
-      partition: 'inference',
-      pendingJobs: 8 + n * 2,
-      runningJobs: 4 + n,
-      completedJobs: 0,
-      heldJobs: 0,
-      allocatedGpus: 24 + n * 6,
-      targetGpus: 32 + n * 8,
-      maxGpus: 96 + (n % 5) * 48,
-      backfillWindowMinutes: 18,
-      preemptions: 0,
-      reason: 'Accepting inference jobs.',
-    },
+    slurm: createDefaultSlurm(96 + (n % 5) * 48, n),
   };
   session.datacenters.push(dc);
   addEvent(session, dc.name, 'grid-agent', 'JOIN_GRID', `${dc.name} joined as an autonomous data-center agent.`);
   touch(session);
   return dc;
+}
+
+export function normalizeSession(session: DemoSession) {
+  session.datacenters.forEach((dc, index) => {
+    dc.slurm ??= createDefaultSlurm(dc.gpuCount, index + 1);
+    dc.slurm.maxGpus = dc.gpuCount;
+    dc.slurm.pendingJobs ??= 0;
+    dc.slurm.runningJobs ??= 0;
+    dc.slurm.completedJobs ??= 0;
+    dc.slurm.heldJobs ??= 0;
+    dc.slurm.allocatedGpus ??= Math.round(dc.actualUtilization * dc.gpuCount);
+    dc.slurm.targetGpus ??= Math.round(dc.desiredUtilization * dc.gpuCount);
+    dc.slurm.backfillWindowMinutes ??= 12;
+    dc.slurm.preemptions ??= 0;
+    dc.slurm.state ??= 'normal';
+    dc.slurm.partition ??= 'inference';
+    dc.slurm.reason ??= 'Migrated existing session to mock Slurm scheduler state.';
+  });
+  return session;
 }
 
 export function applyInferenceRequest(session: DemoSession, datacenterId: string, type: RequestType) {
@@ -219,6 +225,7 @@ function updateDataCenterDemand(session: DemoSession, dc: DataCenterAgent, index
 }
 
 function updateSlurmScheduler(session: DemoSession, dc: DataCenterAgent) {
+  dc.slurm ??= createDefaultSlurm(dc.gpuCount, 1);
   const capGpus = Math.floor(dc.gpuCount * dc.schedulerCap);
   const gridConstrained = session.grid.health !== 'normal' || dc.schedulerCap < 0.72;
   const requestedGpus = Math.ceil(dc.desiredUtilization * dc.gpuCount);
@@ -256,6 +263,23 @@ function updateSlurmScheduler(session: DemoSession, dc: DataCenterAgent) {
   const desiredAllocation = dc.slurm.runningJobs * 6 + dc.slurm.pendingJobs * 1.4;
   dc.slurm.allocatedGpus = Math.round(clamp(desiredAllocation, 0, capGpus));
   dc.slurm.backfillWindowMinutes = gridConstrained ? 4 : clamp(12 + Math.round((1 - dc.actualUtilization) * 18), 6, 30);
+}
+
+function createDefaultSlurm(gpuCount: number, index: number) {
+  return {
+    state: 'normal' as const,
+    partition: 'inference' as const,
+    pendingJobs: 8 + index * 2,
+    runningJobs: 4 + index,
+    completedJobs: 0,
+    heldJobs: 0,
+    allocatedGpus: Math.min(gpuCount, 24 + index * 6),
+    targetGpus: Math.min(gpuCount, 32 + index * 8),
+    maxGpus: gpuCount,
+    backfillWindowMinutes: 18,
+    preemptions: 0,
+    reason: 'Accepting inference jobs.',
+  };
 }
 
 function applyGridAgentNegotiation(session: DemoSession) {

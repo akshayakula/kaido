@@ -164,15 +164,15 @@ export default function DashboardPage() {
               <article className="agent-row" key={dc.id}>
                 <div>
                   <b>{dc.name}</b>
-                  <span>{Math.round(summarizeKw(dc, session.scenario))} kW · {dc.slurm.runningJobs} running · {dc.slurm.pendingJobs} pending</span>
+                  <span>{Math.round(summarizeKw(dc, session.scenario))} kW · {dc.slurm?.runningJobs ?? 0} running · {dc.slurm?.pendingJobs ?? 0} pending</span>
                 </div>
                 <div className="bar"><i style={{ width: `${Math.round(dc.actualUtilization * 100)}%` }} /></div>
-                <small>{dc.slurm.state} · {dc.slurm.allocatedGpus}/{dc.gpuCount} GPUs · cap {Math.round(dc.schedulerCap * 100)}%</small>
+                <small>{dc.slurm?.state ?? 'normal'} · {dc.slurm?.allocatedGpus ?? Math.round(dc.actualUtilization * dc.gpuCount)}/{dc.gpuCount} GPUs · cap {Math.round(dc.schedulerCap * 100)}%</small>
                 <div className="slurm-strip">
-                  <span>held {dc.slurm.heldJobs}</span>
-                  <span>done {dc.slurm.completedJobs}</span>
-                  <span>backfill {dc.slurm.backfillWindowMinutes}m</span>
-                  <span>preempt {dc.slurm.preemptions}</span>
+                  <span>held {dc.slurm?.heldJobs ?? 0}</span>
+                  <span>done {dc.slurm?.completedJobs ?? 0}</span>
+                  <span>backfill {dc.slurm?.backfillWindowMinutes ?? 0}m</span>
+                  <span>preempt {dc.slurm?.preemptions ?? 0}</span>
                 </div>
                 <div className="override-buttons">
                   <button

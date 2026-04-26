@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { normalizeSession } from './simulation';
 import type { DemoSession, SessionSummary } from './types';
 
 const SESSION_TTL_SECONDS = 60 * 60 * 4;
@@ -25,10 +26,11 @@ export async function saveSession(session: DemoSession) {
 
 export async function getSession(id: string) {
   if (redis) {
-    return await redis.get<DemoSession>(sessionKey(id));
+    const session = await redis.get<DemoSession>(sessionKey(id));
+    return session ? normalizeSession(session) : null;
   }
   cleanupMemory();
-  return memory.get(id)?.session ? structuredClone(memory.get(id)!.session) : null;
+  return memory.get(id)?.session ? normalizeSession(structuredClone(memory.get(id)!.session)) : null;
 }
 
 export async function listSessions(): Promise<SessionSummary[]> {
