@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { GridMap } from '@/components/GridMap';
 import type { AgentEvent, DataCenterAgent, DemoSession, Scenario } from '@/lib/types';
 import { summarizeKw } from '@/lib/simulation';
@@ -145,6 +145,7 @@ export default function DashboardPage() {
             <Metric label="Readout" value={solverTone} />
             <Metric label="Data centers" value={session ? String(session.datacenters.length) : '-'} />
           </section>
+          <GridAnalogReadouts session={session} />
           <section className="join-card">
             <p className="eyebrow">Participant entry</p>
             <h2>Users go to the website and join the shared grid</h2>
@@ -279,6 +280,88 @@ export default function DashboardPage() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <div className="metric"><span>{label}</span><b>{value}</b></div>;
+}
+
+function GridAnalogReadouts({ session }: { session: DemoSession | null }) {
+  if (!session) {
+    return (
+      <section className="analog-panel">
+        <p className="eyebrow">Analog grid readouts</p>
+        <div className="empty">Waiting for OpenDSS state.</div>
+      </section>
+    );
+  }
+
+  const { grid } = session;
+  return (
+    <section className="analog-panel">
+      <p className="eyebrow">Analog grid readouts</p>
+      <AnalogGauge
+        label="Voltage floor"
+        value={`${grid.voltageMin.toFixed(3)} pu`}
+        detail={grid.voltageMin < 0.955 ? 'below ANSI band' : grid.voltageMin < 0.974 ? 'sagging' : 'stable'}
+        tone={grid.voltageMin < 0.955 ? 'critical' : grid.voltageMin < 0.974 ? 'warn' : 'ok'}
+        fill={scale(grid.voltageMin, 0.9, 1.03)}
+      />
+      <AnalogGauge
+        label="Feeder loading"
+        value={`${grid.lineLoadingMax.toFixed(2)}x`}
+        detail={grid.lineLoadingMax > 1 ? 'above feeder limit' : grid.lineLoadingMax > 0.82 ? 'near constraint' : 'within margin'}
+        tone={grid.lineLoadingMax > 1 ? 'critical' : grid.lineLoadingMax > 0.82 ? 'warn' : 'ok'}
+        fill={scale(grid.lineLoadingMax, 0.3, 1.25)}
+      />
+      <AnalogGauge
+        label="Reserve"
+        value={`${Math.round(grid.reserveKw).toLocaleString()} kW`}
+        detail={grid.reserveKw < 250 ? 'no headroom' : grid.reserveKw < 900 ? 'thin margin' : 'available'}
+        tone={grid.reserveKw < 250 ? 'critical' : grid.reserveKw < 900 ? 'warn' : 'ok'}
+        fill={scale(grid.reserveKw, 0, 2800)}
+      />
+      <AnalogGauge
+        label="Frequency"
+        value={`${grid.frequencyHz.toFixed(2)} Hz`}
+        detail={grid.frequencyHz < 59.98 ? 'droop visible' : 'nominal'}
+        tone={grid.frequencyHz < 59.98 ? 'warn' : 'ok'}
+        fill={scale(grid.frequencyHz, 59.9, 60.05)}
+      />
+      <AnalogGauge
+        label="Losses"
+        value={`${Math.round(grid.lossesKw)} kW`}
+        detail="thermal waste"
+        tone={grid.lossesKw > 220 ? 'warn' : 'ok'}
+        fill={scale(grid.lossesKw, 40, 320)}
+      />
+    </section>
+  );
+}
+
+function AnalogGauge({
+  label,
+  value,
+  detail,
+  tone,
+  fill,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone: 'ok' | 'warn' | 'critical';
+  fill: number;
+}) {
+  return (
+    <div className="analog-gauge" data-tone={tone} style={{ '--gauge-angle': `${-74 + fill * 1.48}deg` } as CSSProperties}>
+      <div>
+        <span>{label}</span>
+        <b>{value}</b>
+      </div>
+      <i aria-hidden="true" />
+      <small>{detail}</small>
+    </div>
+  );
+}
+
+function scale(value: number, min: number, max: number) {
+  return Math.round(Math.max(0, Math.min(1, (value - min) / (max - min))) * 100);
 }
 
 function ConversationEvent({ event, isLatest }: { event: AgentEvent; isLatest: boolean }) {

@@ -457,71 +457,6 @@ h2 {
   z-index: 0;
 }
 
-.flow-pulse-layer {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  overflow: hidden;
-}
-
-.flow-pulse {
-  --flow-scale: 1;
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 10px;
-  height: 10px;
-  border: 1px solid rgba(228, 226, 201, 0.92);
-  border-radius: 50%;
-  background: rgba(228, 226, 201, 0.78);
-  box-shadow: 0 0 14px rgba(228, 226, 201, 0.52);
-  opacity: 0.86;
-  will-change: transform;
-}
-
-.flow-pulse::after {
-  position: absolute;
-  inset: -7px;
-  border: 1px solid currentColor;
-  border-radius: inherit;
-  content: "";
-  opacity: 0.24;
-  animation: powerPulseRing 1.2s ease-out infinite;
-}
-
-.flow-pulse.medium {
-  color: var(--yellow);
-  border-color: rgba(242, 211, 107, 0.95);
-  background: rgba(242, 211, 107, 0.78);
-  box-shadow: 0 0 18px rgba(242, 211, 107, 0.52);
-}
-
-.flow-pulse.high {
-  color: var(--red);
-  width: 12px;
-  height: 12px;
-  border-color: rgba(226, 123, 99, 0.98);
-  background: rgba(226, 123, 99, 0.84);
-  box-shadow: 0 0 22px rgba(226, 123, 99, 0.66);
-}
-
-.flow-pulse[data-speaking="true"] {
-  outline: 1px solid rgba(228, 226, 201, 0.9);
-  outline-offset: 4px;
-}
-
-@keyframes powerPulseRing {
-  0% {
-    opacity: 0.34;
-    transform: scale(0.58);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.55);
-  }
-}
-
 .mapbox-globe-canvas .mapboxgl-canvas {
   outline: none;
 }
@@ -989,6 +924,102 @@ h2 {
   font-weight: 700;
   line-height: 0.92;
   text-transform: uppercase;
+}
+
+.analog-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: rgba(228, 226, 201, 0.035);
+}
+
+.analog-panel .eyebrow {
+  margin-bottom: 0;
+}
+
+.analog-gauge {
+  --gauge-angle: 0deg;
+  display: grid;
+  grid-template-columns: minmax(92px, 1fr) 78px;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid rgba(228, 226, 201, 0.14);
+  background: rgba(23, 23, 15, 0.28);
+}
+
+.analog-gauge div {
+  min-width: 0;
+}
+
+.analog-gauge span,
+.analog-gauge small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.analog-gauge b {
+  display: block;
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.analog-gauge i {
+  position: relative;
+  height: 42px;
+  border-bottom: 1px solid rgba(228, 226, 201, 0.22);
+  overflow: hidden;
+}
+
+.analog-gauge i::before {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -36px;
+  height: 72px;
+  border: 1px solid rgba(228, 226, 201, 0.28);
+  border-radius: 72px 72px 0 0;
+  content: "";
+}
+
+.analog-gauge i::after {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 2px;
+  height: 34px;
+  background: var(--green);
+  content: "";
+  transform: translateX(-50%) rotate(var(--gauge-angle));
+  transform-origin: bottom center;
+  transition: transform 480ms ease, background 240ms ease;
+}
+
+.analog-gauge[data-tone="warn"] i::after {
+  background: var(--yellow);
+}
+
+.analog-gauge[data-tone="warn"] b {
+  color: var(--yellow);
+}
+
+.analog-gauge[data-tone="critical"] i::after {
+  background: var(--red);
+}
+
+.analog-gauge[data-tone="critical"] b {
+  color: var(--red);
+}
+
+.analog-gauge small {
+  grid-column: 1 / -1;
 }
 
 .join-card input {
@@ -1669,12 +1700,13 @@ h2 {
   right: 18px;
   z-index: 10;
   width: 280px;
-  max-height: calc(100vh - 36px);
+  max-height: calc(100vh - 360px);
   overflow: auto;
 }
 
 .dashboard-screen .status-card,
 .dashboard-screen .metrics,
+.dashboard-screen .analog-panel,
 .dashboard-screen .join-card,
 .dashboard-screen .panel,
 .dashboard-screen .cylinder-readout,
@@ -1708,6 +1740,32 @@ h2 {
 
 .dashboard-screen .metric b {
   font-size: 19px;
+}
+
+.dashboard-screen .analog-panel {
+  padding: 8px;
+}
+
+.dashboard-screen .analog-gauge {
+  grid-template-columns: minmax(86px, 1fr) 68px;
+  padding: 6px;
+}
+
+.dashboard-screen .analog-gauge b {
+  font-size: 13px;
+}
+
+.dashboard-screen .analog-gauge i {
+  height: 34px;
+}
+
+.dashboard-screen .analog-gauge i::before {
+  bottom: -30px;
+  height: 60px;
+}
+
+.dashboard-screen .analog-gauge i::after {
+  height: 28px;
 }
 
 .dashboard-screen .join-card h2 {
