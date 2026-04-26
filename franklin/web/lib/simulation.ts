@@ -143,13 +143,21 @@ export function normalizeSession(session: DemoSession) {
   if (!session.site || session.site.region !== nova.region) {
     session.site = nova;
   }
-  // Keep sessions bounded, but only pad up to the seeded demo count.
+  // Cap, but never auto-pad — operator deletes must stick. If the session
+  // somehow ends up empty, the next manual /join (or the explicit seed in
+  // createSessionWithId) will repopulate it.
   if (session.datacenters.length > MAX_DATACENTERS) {
     session.datacenters = session.datacenters.slice(0, MAX_DATACENTERS);
-  } else if (session.datacenters.length < SEED_DATACENTERS) {
-    while (session.datacenters.length < SEED_DATACENTERS) createDataCenter(session);
   }
+  // Migrate any DC with a generic / placeholder name to the canonical
+  // Ashburn-area campus name for its slot. Keeps custom display names from
+  // /join intact while rewriting auto-generated stubs in Upstash on read.
+  const GENERIC_NAME = /^(data\s*center\s*\d*|dc\s*\d+|datacenter\d+|unnamed)\s*$/i;
   session.datacenters.forEach((dc, i) => {
+    if (!dc.name || GENERIC_NAME.test(dc.name.trim())) {
+      const slot = ASHBURN_DC_COORDS[i % ASHBURN_DC_COORDS.length];
+      dc.name = slot[2];
+    }
     const distFromAshburn = Math.hypot(dc.lat - 39.04, dc.lng - -77.49);
     // Migrate any DC that's >0.5° from Ashburn (legacy / random coords)
     // OR within 0.0025° (~280 m) of another DC — the latter catches stale
