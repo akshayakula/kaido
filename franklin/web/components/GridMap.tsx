@@ -115,6 +115,7 @@ export function GridMap({ session }: GridMapProps) {
         glyphs: 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf',
         sources: {
           countries: { type: 'vector', url: 'mapbox://mapbox.country-boundaries-v1' },
+          streets:   { type: 'vector', url: 'mapbox://mapbox.mapbox-streets-v8' },
           lights: emptyGeoJsonSource(),
           flows: emptyGeoJsonSource(),
           cylinders: emptyGeoJsonSource(),
@@ -122,7 +123,54 @@ export function GridMap({ session }: GridMapProps) {
           site: emptyGeoJsonSource(),
         },
         layers: [
-          { id: 'bg', type: 'background', paint: { 'background-color': 'rgba(0,0,0,0)' } },
+          // Base land tone — slightly warmer than the page bg.
+          { id: 'bg', type: 'background', paint: { 'background-color': '#1c1c14' } },
+          // Park / forest patches — quietly differentiate green spaces.
+          {
+            id: 'landuse-park',
+            type: 'fill',
+            source: 'streets',
+            'source-layer': 'landuse',
+            filter: ['in', ['get', 'class'], ['literal', ['park', 'wood', 'pitch', 'cemetery', 'national_park']]],
+            paint: { 'fill-color': 'rgba(168, 174, 130, 0.10)' },
+          },
+          // Built-up / industrial — subtle warmer tint where there's density.
+          {
+            id: 'landuse-urban',
+            type: 'fill',
+            source: 'streets',
+            'source-layer': 'landuse',
+            filter: ['in', ['get', 'class'], ['literal', ['residential', 'industrial', 'commercial']]],
+            paint: { 'fill-color': 'rgba(228, 226, 201, 0.045)' },
+          },
+          // Water (Potomac, Chesapeake, lakes) — distinctly darker so the
+          // shoreline reads even without labels.
+          {
+            id: 'water',
+            type: 'fill',
+            source: 'streets',
+            'source-layer': 'water',
+            paint: { 'fill-color': '#0e1418', 'fill-opacity': 0.85 },
+          },
+          // Small streams / rivers as thin lines.
+          {
+            id: 'waterway',
+            type: 'line',
+            source: 'streets',
+            'source-layer': 'waterway',
+            minzoom: 7,
+            paint: { 'line-color': 'rgba(120, 140, 158, 0.5)', 'line-width': 0.6 },
+          },
+          // State lines pulled from the streets admin layer (level 1) — gives
+          // VA/MD/DC borders without any text.
+          {
+            id: 'state-lines',
+            type: 'line',
+            source: 'streets',
+            'source-layer': 'admin',
+            filter: ['==', ['get', 'admin_level'], 1],
+            paint: { 'line-color': FOREGROUND, 'line-width': 0.45, 'line-opacity': 0.35, 'line-dasharray': [2, 2] },
+          },
           {
             id: 'country-lines',
             type: 'line',
