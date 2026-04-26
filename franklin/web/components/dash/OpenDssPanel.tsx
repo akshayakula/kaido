@@ -31,19 +31,24 @@ export function OpenDssPanel({ session }: { session: DemoSession | null }) {
   const { grid } = session;
   const dcs = session.datacenters;
 
-  const W = 920;
+  // Widened viewBox so load nodes spread out instead of crowding.
+  // Per-node spacing = (busEnd - busStart) / N. With more pixels here,
+  // each load box gets more breathing room without changing rendered size.
+  const N = Math.max(1, dcs.length);
+  const MIN_PER_NODE = 180; // px of horizontal room each tap needs.
+  const baseW = 1180;
+  const W = Math.max(baseW, 360 + MIN_PER_NODE * N + 60);
   const H = 320;
   const srcX = 70;
   const busY = 110;
   const xfX = 220;
-  const busStart = 320;
-  const busEnd = W - 50;
+  const busStart = 360;
+  const busEnd = W - 60;
   const loadTop = H - 120;
 
   const lt = lineTone(grid.lineLoadingMax);
   const vt = voltTone(grid.voltageMin);
 
-  const N = Math.max(1, dcs.length);
   const xs = dcs.map((_, i) => busStart + ((busEnd - busStart) * (i + 0.5)) / N);
   const totalKw = dcs.reduce((sum, dc) => sum + summarizeKw(dc, session.scenario), 0);
   const maxKw = Math.max(1, ...dcs.map((dc) => summarizeKw(dc, session.scenario)));
