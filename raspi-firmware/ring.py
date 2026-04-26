@@ -554,10 +554,34 @@ def render_volcano(strip, delta_c, mic_level, t):
         alive.append(p)
     s["particles"] = alive
 
-    # --- stable mode: soft white breathing pixel at north ---
-    if spawn_per_sec == 0 and not alive and t >= s["flash_until"]:
-        breathe = 0.30 + 0.18 * math.sin(t * 1.5)
-        _add(buf, NORTH_LED, breathe, breathe, breathe * 0.95)
+    # --- constant-state core glow centered on south ---
+    # The south origin is *always* lit. Its color shows direction
+    # (white when stable, warming-orange when Δ>0, cooling-cyan when Δ<0)
+    # and its brightness + spread along ±arc grows with |Δ| so the ring
+    # always reads "this device is alive AND here's the current trend"
+    # even when no particles are in flight.
+    abs_d = abs(delta_c)
+    if abs_d < 0.1:
+        # Stable: gentle white breathing core; tiny halo on adjacent LEDs.
+        breathe = 0.40 + 0.18 * math.sin(t * 1.5)
+        core_r, core_g, core_b = breathe, breathe, breathe * 0.95
+        spread = 1
+    else:
+        # Mag 0 → 1 over ±2 °C, clamped — controls brightness AND halo width.
+        mag = min(1.0, abs_d / 2.0)
+        peak = 0.55 + 0.45 * mag                # 0.55 → 1.00
+        if delta_c > 0:
+            core_r, core_g, core_b = peak, peak * 0.30, peak * 0.05  # ember
+        else:
+            core_r, core_g, core_b = peak * 0.05, peak * 0.55, peak  # icy cyan
+        spread = 1 + int(round(mag * 3))        # 1..4 LEDs each side
+
+    _add(buf, SOUTH_LED, core_r, core_g, core_b)
+    for d in range(1, spread + 1):
+        falloff = (1.0 - d / (spread + 1)) ** 1.4
+        for side in (-1, +1):
+            led = (SOUTH_LED + side * d) % NUM_LEDS
+            _add(buf, led, core_r * falloff * 0.55, core_g * falloff * 0.55, core_b * falloff * 0.55)
 
     # --- mic sparkles (additive white) ---
     rate = 30.0 * mic_level
