@@ -4,24 +4,27 @@ import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { GridMap } from '@/components/GridMap';
 import type { AgentEvent, DataCenterAgent, DemoSession, Scenario } from '@/lib/types';
 import { summarizeKw } from '@/lib/simulation';
+import { scenarioBrief, scenarioLabel, scenarioOptions } from '@/lib/scenarios';
 
 const DEFAULT_SESSION_ID = 'default';
 
-const scenarios: { value: Scenario; label: string }[] = [
-  { value: 'nominal', label: 'Nominal' },
-  { value: 'heatwave', label: 'Heatwave cooling surge' },
-  { value: 'feeder_constraint', label: 'Feeder constraint' },
-  { value: 'renewable_drop', label: 'Renewable drop' },
-  { value: 'demand_spike', label: 'Demand spike' },
-];
+type StoreHealth = {
+  configured: boolean;
+  mode: 'upstash' | 'memory' | 'memory-fallback';
+  ok: boolean;
+  host: string | null;
+  activeSessions?: number;
+};
 
 export default function DashboardPage() {
   const [session, setSession] = useState<DemoSession | null>(null);
   const [chatMessage, setChatMessage] = useState('');
   const [joinCopied, setJoinCopied] = useState(false);
+  const [storeHealth, setStoreHealth] = useState<StoreHealth | null>(null);
 
   useEffect(() => {
     refresh(DEFAULT_SESSION_ID);
+    refreshStoreHealth();
   }, []);
 
   useEffect(() => {
@@ -32,6 +35,7 @@ export default function DashboardPage() {
         const data = (await response.json()) as { session: DemoSession };
         setSession(data.session);
       }
+      refreshStoreHealth();
     }, 1000);
     return () => window.clearInterval(interval);
   }, [session?.id]);
@@ -46,6 +50,13 @@ export default function DashboardPage() {
     if (!response.ok) return;
     const data = (await response.json()) as { session: DemoSession };
     setSession(data.session);
+  }
+
+  async function refreshStoreHealth() {
+    const response = await fetch('/api/upstash/health');
+    if (!response.ok && response.status !== 503) return;
+    const data = (await response.json()) as StoreHealth;
+    setStoreHealth(data);
   }
 
   async function changeScenario(scenario: Scenario) {
@@ -123,10 +134,11 @@ export default function DashboardPage() {
             <div>
               <p className="eyebrow">Grid site</p>
               <h2>{session ? `${session.site.name} · ${session.site.region}` : 'No session yet'}</h2>
+              {session && <small className="scenario-brief">{scenarioBrief(session.scenario)}</small>}
             </div>
             {session && (
               <select value={session.scenario} onChange={(event) => changeScenario(event.target.value as Scenario)}>
-                {scenarios.map((scenario) => <option key={scenario.value} value={scenario.value}>{scenario.label}</option>)}
+                {scenarioOptions.map((scenario) => <option key={scenario.value} value={scenario.value}>{scenario.label}</option>)}
               </select>
             )}
           </div>
@@ -144,6 +156,7 @@ export default function DashboardPage() {
             <Metric label="Relative draw" value={drawLevel} />
             <Metric label="Readout" value={solverTone} />
             <Metric label="Data centers" value={session ? String(session.datacenters.length) : '-'} />
+            <Metric label="Session store" value={storeHealth ? storeHealthLabel(storeHealth) : 'checking'} />
           </section>
           <GridAnalogReadouts session={session} />
           <section className="join-card">
@@ -261,6 +274,7 @@ export default function DashboardPage() {
           <>
             <div className="dss-facts">
               <span><b>Scenario</b>{scenarioLabel(dssPreview.scenario)}</span>
+              <span className="dss-brief"><b>Posture</b>{dssPreview.brief}</span>
               <span><b>Source</b>{dssPreview.config.sourcePu.toFixed(3)} pu</span>
               <span><b>Transformer</b>{dssPreview.config.substationKva.toLocaleString()} kVA</span>
               <span><b>Feeder limit</b>{dssPreview.config.lineNormamps} A</span>
@@ -448,6 +462,13 @@ function eventHint(event: AgentEvent) {
   return `Raw event: ${event.type}`;
 }
 
+function storeHealthLabel(health: StoreHealth) {
+  if (health.mode === 'upstash' && health.ok) return 'Upstash live';
+  if (health.mode === 'memory-fallback') return 'Redis fallback';
+  if (!health.configured) return 'memory only';
+  return 'checking';
+}
+
 function getDrawLevel(session: DemoSession) {
   if (!session.datacenters.length) return 'idle';
   const averageDraw =
@@ -508,7 +529,7 @@ function buildDssPreview(session: DemoSession) {
   }
 
   commands.push('Set Voltagebases=[12.47]', 'CalcVoltageBases', 'Set maxcontroliter=50', 'Solve');
-  return { commands, config, feederKw, scenario: session.scenario };
+  return { commands, config, feederKw, scenario: session.scenario, brief: scenarioBrief(session.scenario) };
 }
 
 function datacenterKw(dc: DataCenterAgent, coolingFactor: number) {
@@ -516,8 +537,4 @@ function datacenterKw(dc: DataCenterAgent, coolingFactor: number) {
   const util = Math.max(dc.actualUtilization, allocated / Math.max(1, dc.gpuCount));
   const computeKw = dc.gpuCount * dc.gpuKw * util;
   return Math.max(0, dc.baseKw + computeKw + computeKw * coolingFactor - dc.batterySupportKw);
-}
-
-function scenarioLabel(scenario: Scenario) {
-  return scenario.replaceAll('_', ' ');
 }

@@ -15,6 +15,49 @@ const redis =
       })
     : null;
 
+export type SessionStoreHealth = {
+  configured: boolean;
+  mode: 'upstash' | 'memory' | 'memory-fallback';
+  ok: boolean;
+  host: string | null;
+  ping?: string;
+  roundTrip?: boolean;
+  activeSessions?: number;
+  error?: string;
+};
+
+export async function getSessionStoreHealth(): Promise<SessionStoreHealth> {
+  const host = getUpstashHost();
+  if (!redis) {
+    return { configured: false, mode: 'memory', ok: true, host };
+  }
+
+  try {
+    const key = `session-store-health:${crypto.randomUUID().slice(0, 10)}`;
+    const ping = await redis.ping();
+    await redis.set(key, { ok: true, at: Date.now() }, { ex: 60 });
+    const roundTrip = await redis.get<{ ok: boolean; at: number }>(key);
+    const activeSessions = await redis.zcard(ACTIVE_KEY).catch(() => undefined);
+    return {
+      configured: true,
+      mode: 'upstash',
+      ok: ping === 'PONG' && roundTrip?.ok === true,
+      host,
+      ping,
+      roundTrip: roundTrip?.ok === true,
+      activeSessions,
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      mode: 'memory-fallback',
+      ok: false,
+      host,
+      error: error instanceof Error ? error.message : 'Unknown Upstash error',
+    };
+  }
+}
+
 export async function saveSession(session: DemoSession) {
   session.updatedAt = Date.now();
   memory.set(session.id, { session: structuredClone(session), expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000 });
@@ -95,6 +138,16 @@ export function summarize(session: DemoSession): SessionSummary {
 
 function sessionKey(id: string) {
   return `session:${id}:state`;
+}
+
+function getUpstashHost() {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  if (!url) return null;
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return 'invalid-url';
+  }
 }
 
 function cleanupMemory() {

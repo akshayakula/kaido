@@ -1648,6 +1648,15 @@ h2 {
   font-size: 18px;
 }
 
+.dashboard-screen .scenario-brief {
+  display: block;
+  margin-top: 5px;
+  max-width: 31ch;
+  color: rgba(228, 226, 201, 0.72);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .dashboard-screen .map-wrap,
 .dashboard-screen .franklin-globe-grid,
 .dashboard-screen .grid-empty {
@@ -1875,6 +1884,11 @@ h2 {
   padding: 5px 6px;
   background: rgba(228, 226, 201, 0.035);
   font-size: 10px;
+}
+
+.dashboard-screen .terminal-panel .dss-facts .dss-brief {
+  flex-basis: 100%;
+  line-height: 1.4;
 }
 
 .dashboard-screen .terminal-panel .dss-facts b {

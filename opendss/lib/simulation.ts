@@ -7,6 +7,7 @@ import type {
   RequestType,
   Scenario,
 } from './types';
+import { scenarioBrief, scenarioLabel } from './scenarios';
 
 const SITES: GridSite[] = [
   { name: 'Reno Compute Corridor', region: 'Nevada, US', lat: 39.5296, lng: -119.8138 },
@@ -158,7 +159,7 @@ export function applyManualOverride(
 
 export function setScenario(session: DemoSession, scenario: Scenario) {
   session.scenario = scenario;
-  addEvent(session, 'operator', 'grid-agent', 'SCENARIO_CHANGE', `Scenario changed to ${scenario.replaceAll('_', ' ')}.`);
+  addEvent(session, 'operator', 'grid-agent', 'SCENARIO_CHANGE', `Scenario changed to ${scenarioLabel(scenario)}: ${scenarioBrief(scenario)}`);
   tickSession(session);
 }
 

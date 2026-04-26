@@ -1,4 +1,5 @@
 import { appendAgentEvent } from './simulation';
+import { scenarioBrief, scenarioLabel } from './scenarios';
 import type { DataCenterAgent, DemoSession, RequestType } from './types';
 
 type Trigger =
@@ -19,7 +20,7 @@ type OpenAIResponse = {
 const fallbackByTrigger: Record<Trigger['kind'], string> = {
   inference_request: 'Data-center agent requests added inference capacity; grid agent asks scheduler to price load against feeder margin.',
   grid_tick: 'Grid agent reviews OpenDSS state and asks flexible schedulers for relief offers where latency budgets allow.',
-  scenario_change: 'Grid agent updates the negotiation context and asks data centers to re-evaluate GPU caps under the new disruption.',
+  scenario_change: 'Grid agent updates the national-security posture and asks data centers to re-price GPU work against mission-critical grid constraints.',
   datacenter_chat: 'Grid agent acknowledges the request and asks the scheduler to balance queue growth against feeder reserve.',
   operator_chat: 'Grid agent broadcasts the operator instruction and requests updated relief offers from participating data centers.',
 };
@@ -95,14 +96,18 @@ async function generateNegotiationText(session: DemoSession, trigger: Trigger, a
         {
           role: 'system',
           content:
-            'You write terse, realistic agent-to-agent negotiation messages for an electric-grid/data-center demo. Return one sentence under 38 words. Mention the concrete tradeoff between grid constraints and GPU scheduling. Do not include markdown.',
+            'You write terse, realistic agent-to-agent negotiation messages for a defensive electric-grid/data-center national-security demo. Return one sentence under 38 words. Mention the concrete tradeoff between grid constraints and GPU scheduling. Do not include markdown.',
         },
         {
           role: 'user',
           content: JSON.stringify({
             trigger: triggerSummary,
             site: session.site,
-            scenario: session.scenario,
+            scenario: {
+              key: session.scenario,
+              label: scenarioLabel(session.scenario),
+              brief: scenarioBrief(session.scenario),
+            },
             grid: session.grid,
             datacenters,
           }),
