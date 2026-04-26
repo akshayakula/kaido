@@ -51,9 +51,24 @@ export type GridDataCenterLoad = {
   bus: string;
   kw: number;
   kvar: number;
+  requestedKw?: number;
+  allocatedKw?: number;
+  deferredKw?: number;
+  allocatedUtilization?: number;
   line: string;
   lineLoading?: number;
   lineAmps?: number;
+};
+
+export type GridAllocation = {
+  requestedKw: number;
+  allocatedKw: number;
+  deferredKw: number;
+  requestedUtilization: number;
+  allocatedUtilization: number;
+  batteryDispatchKw: number;
+  constraint: 'none' | 'voltage' | 'line' | 'transformer' | 'reserve';
+  reason: string;
 };
 
 export type SlurmScheduler = {
@@ -91,6 +106,7 @@ export type DataCenterAgent = {
   priority: number;
   lastInstruction: string;
   slurm: SlurmScheduler;
+  gridAllocation?: GridAllocation;
 };
 
 export type DemoSession = {

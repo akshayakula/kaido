@@ -60,6 +60,7 @@ export function ReadoutsClient() {
   }, [filter, session]);
 
   const latestAi = session?.events.find((event) => event.type === 'AI_NEGOTIATION' || event.type === 'AI_FALLBACK');
+  const deferredKw = session?.datacenters.reduce((sum, dc) => sum + (dc.gridAllocation?.deferredKw ?? 0), 0);
 
   return (
     <main className="shell readouts-shell">
@@ -80,6 +81,7 @@ export function ReadoutsClient() {
         <ReadoutStat label="Grid" value={session?.grid.health ?? 'waiting'} detail={session?.grid.solver ?? 'readout pending'} />
         <ReadoutStat label="Feeder" value={formatKw(session?.grid.feederKw)} detail="OpenDSS total load" />
         <ReadoutStat label="Transformer" value={formatRatio(session?.grid.transformerLoading)} detail="solved loading" />
+        <ReadoutStat label="Deferred" value={formatKw(deferredKw)} detail="agent allocation" />
         <ReadoutStat label="Events" value={String(session?.events.length ?? 0)} detail={latestAi ? latestAi.type : 'no AI turn yet'} />
         <ReadoutStat label="Store" value={storeHealthLabel(storeHealth)} detail={storeHealth?.host ?? 'server-side only'} />
         <ReadoutStat label="Updated" value={lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'waiting'} detail="1s polling" />
@@ -129,14 +131,18 @@ function GridPhysicsReadout({ session }: { session: DemoSession | null }) {
           <div className="physics-row physics-head">
             <span>Data center</span>
             <span>Bus</span>
-            <span>Load</span>
+            <span>Requested</span>
+            <span>Allocated</span>
+            <span>Deferred</span>
             <span>Branch</span>
           </div>
           {loads.length ? loads.map((load) => (
             <div className="physics-row" key={`${load.id ?? load.name}-${load.bus}`}>
               <span>{load.name}</span>
               <span>{load.bus}</span>
-              <span>{Math.round(load.kw).toLocaleString()} kW</span>
+              <span>{formatKw(load.requestedKw ?? load.kw)}</span>
+              <span>{formatKw(load.allocatedKw ?? load.kw)}</span>
+              <span>{formatKw(load.deferredKw)}</span>
               <span>{load.lineLoading === undefined ? load.line : `${load.line} · ${Math.round(load.lineLoading * 100)}%`}</span>
             </div>
           )) : <div className="empty">Waiting for a solved data-center load.</div>}

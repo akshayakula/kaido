@@ -111,6 +111,7 @@ export function normalizeSession(session: DemoSession) {
     dc.slurm.state ??= 'normal';
     dc.slurm.partition ??= 'inference';
     dc.slurm.reason ??= 'Migrated existing session to mock Slurm scheduler state.';
+    dc.gridAllocation ??= createAllocation(dc, session.scenario, dc.actualUtilization, 'none', 'Existing session allocation initialized.');
   });
   return session;
 }
@@ -170,6 +171,7 @@ export function tickSession(session: DemoSession) {
   const firstSolve = solveGridStep(session);
   session.grid = firstSolve;
   applyGridAgentNegotiation(session);
+  applyGridAgentAllocation(session);
   session.grid = solveGridStep(session);
   touch(session);
 }
@@ -181,6 +183,8 @@ export function appendPowerFlowResult(session: DemoSession) {
     typeof session.grid.transformerLoading === 'number'
       ? `, transformer ${Math.round(session.grid.transformerLoading * 100)}%`
       : '';
+  const deferredKw = session.datacenters.reduce((sum, dc) => sum + (dc.gridAllocation?.deferredKw ?? 0), 0);
+  const allocation = deferredKw > 1 ? `, agent deferred ${Math.round(deferredKw)} kW` : ', agent cleared requested allocation';
   addEvent(
     session,
     source,
@@ -188,7 +192,7 @@ export function appendPowerFlowResult(session: DemoSession) {
     'POWER_FLOW_RESULT',
     `Solved ${session.datacenters.length} data centers: voltage ${session.grid.voltageMin.toFixed(3)} pu, line loading ${Math.round(
       session.grid.lineLoadingMax * 100
-    )}%, reserve ${Math.round(session.grid.reserveKw)} kW${feeder}${transformer}.`
+    )}%, reserve ${Math.round(session.grid.reserveKw)} kW${feeder}${transformer}${allocation}.`
   );
   touch(session);
 }
@@ -225,7 +229,8 @@ function updateDataCenterDemand(session: DemoSession, dc: DataCenterAgent, index
   const wave = Math.sin((session.tick + index * 3) / 6) * 0.035;
   updateSlurmScheduler(session, dc);
   const slurmUtilization = dc.slurm.allocatedGpus / Math.max(1, dc.gpuCount);
-  const target = clamp(Math.max(dc.desiredUtilization + wave, slurmUtilization), 0.16, dc.schedulerCap);
+  const allocationCap = dc.gridAllocation?.allocatedUtilization ?? dc.schedulerCap;
+  const target = clamp(Math.max(dc.desiredUtilization + wave, slurmUtilization), 0.16, Math.min(dc.schedulerCap, allocationCap));
   dc.actualUtilization += (target - dc.actualUtilization) * 0.32;
   const served = Math.round(dc.slurm.runningJobs * 5 + dc.gpuCount * dc.actualUtilization * 0.16);
   const background = session.scenario === 'demand_spike' ? 36 : 14;
@@ -242,7 +247,8 @@ function updateDataCenterDemand(session: DemoSession, dc: DataCenterAgent, index
 
 function updateSlurmScheduler(session: DemoSession, dc: DataCenterAgent) {
   dc.slurm ??= createDefaultSlurm(dc.gpuCount, 1);
-  const capGpus = Math.floor(dc.gpuCount * dc.schedulerCap);
+  const allocationCap = dc.gridAllocation?.allocatedUtilization ?? dc.schedulerCap;
+  const capGpus = Math.floor(dc.gpuCount * Math.min(dc.schedulerCap, allocationCap));
   const gridConstrained = session.grid.health !== 'normal' || dc.schedulerCap < 0.72;
   const requestedGpus = Math.ceil(dc.desiredUtilization * dc.gpuCount);
   dc.slurm.maxGpus = dc.gpuCount;
@@ -328,7 +334,129 @@ function applyGridAgentNegotiation(session: DemoSession) {
   });
 }
 
+export function applyGridAgentAllocation(session: DemoSession) {
+  const pressure = scenarioPressure[session.scenario];
+  const transformerBudgetKw = pressure.capacityKw * 0.92;
+  const reserveHoldKw = session.scenario === 'nominal' ? 620 : session.scenario === 'demand_spike' ? 980 : 820;
+  const budgetKw = Math.max(0, transformerBudgetKw - reserveHoldKw);
+  const constraint = allocationConstraint(session);
+  const requests = session.datacenters.map((dc) => {
+    const requestedUtilization = clamp(
+      Math.max(dc.desiredUtilization, dc.actualUtilization, (dc.slurm?.targetGpus ?? 0) / Math.max(1, dc.gpuCount)),
+      0.16,
+      1
+    );
+    const floorUtilization = dc.priority > 0.75 ? 0.34 : dc.priority > 0.55 ? 0.26 : 0.18;
+    const minUtilization = clamp(Math.min(requestedUtilization, floorUtilization), 0.12, 0.5);
+    const requestedKw = kwForUtilization(dc, pressure.cooling, requestedUtilization);
+    const minimumKw = kwForUtilization(dc, pressure.cooling, minUtilization);
+    const flexibleKw = Math.max(0, requestedKw - minimumKw);
+    const weight = 0.65 + dc.priority * 1.8 + (dc.slurm?.partition === 'priority' ? 0.65 : 0) + Math.min(0.5, dc.queueDepth / 8000);
+    return { dc, requestedUtilization, minUtilization, requestedKw, minimumKw, flexibleKw, weight };
+  });
+
+  const totalRequested = requests.reduce((sum, item) => sum + item.requestedKw, 0);
+  const totalMinimum = requests.reduce((sum, item) => sum + item.minimumKw, 0);
+  let extraBudget = Math.max(0, budgetKw - totalMinimum);
+  let totalWeight = requests.reduce((sum, item) => sum + (item.flexibleKw > 0 ? item.weight : 0), 0);
+  const allocatedExtras = new Map<string, number>();
+
+  for (const item of requests) {
+    allocatedExtras.set(item.dc.id, 0);
+  }
+
+  for (let pass = 0; pass < requests.length && extraBudget > 0.1 && totalWeight > 0; pass += 1) {
+    let usedThisPass = 0;
+    for (const item of requests) {
+      const already = allocatedExtras.get(item.dc.id) ?? 0;
+      const remainingFlexible = Math.max(0, item.flexibleKw - already);
+      if (remainingFlexible <= 0) continue;
+      const share = Math.min(remainingFlexible, (extraBudget * item.weight) / totalWeight);
+      allocatedExtras.set(item.dc.id, already + share);
+      usedThisPass += share;
+    }
+    if (usedThisPass <= 0.1) break;
+    extraBudget -= usedThisPass;
+    totalWeight = requests.reduce((sum, item) => {
+      const already = allocatedExtras.get(item.dc.id) ?? 0;
+      return sum + (item.flexibleKw - already > 0.1 ? item.weight : 0);
+    }, 0);
+  }
+
+  requests.forEach((item) => {
+    const extra = totalRequested <= budgetKw ? item.flexibleKw : allocatedExtras.get(item.dc.id) ?? 0;
+    const allocatedKw = Math.min(item.requestedKw, item.minimumKw + extra);
+    const allocatedUtilization = utilizationForKw(item.dc, pressure.cooling, allocatedKw);
+    const deferredKw = Math.max(0, item.requestedKw - allocatedKw);
+    item.dc.gridAllocation = {
+      requestedKw: item.requestedKw,
+      allocatedKw,
+      deferredKw,
+      requestedUtilization: item.requestedUtilization,
+      allocatedUtilization,
+      batteryDispatchKw: item.dc.batterySupportKw,
+      constraint: totalRequested <= budgetKw ? 'none' : constraint,
+      reason:
+        totalRequested <= budgetKw
+          ? 'Grid agent cleared requested GPU load within reserve posture.'
+          : `Grid agent allocated ${Math.round(allocatedKw)} kW of ${Math.round(item.requestedKw)} kW requested to hold ${Math.round(reserveHoldKw)} kW reserve.`,
+    };
+    item.dc.lastInstruction =
+      deferredKw > 20
+        ? `Grid allocation active: ${Math.round(allocatedKw)} kW cleared, ${Math.round(deferredKw)} kW deferred.`
+        : 'Grid allocation cleared requested load.';
+  });
+}
+
 function kwForDataCenter(dc: DataCenterAgent, coolingFactor: number) {
+  if (dc.gridAllocation) return dc.gridAllocation.allocatedKw;
+  return kwForUtilization(dc, coolingFactor, Math.max(dc.actualUtilization, dc.slurm.allocatedGpus / Math.max(1, dc.gpuCount)));
+}
+
+function kwForUtilization(dc: DataCenterAgent, coolingFactor: number, utilization: number) {
+  const util = clamp(utilization, 0, 1.1);
+  const computeKw = dc.gpuCount * dc.gpuKw * util;
+  const coolingKw = computeKw * coolingFactor;
+  return Math.max(0, dc.baseKw + computeKw + coolingKw - dc.batterySupportKw);
+}
+
+function utilizationForKw(dc: DataCenterAgent, coolingFactor: number, kw: number) {
+  const computeKw = Math.max(0, (kw + dc.batterySupportKw - dc.baseKw) / (1 + coolingFactor));
+  return clamp(computeKw / Math.max(1, dc.gpuCount * dc.gpuKw), 0.12, 1);
+}
+
+function createAllocation(
+  dc: DataCenterAgent,
+  scenario: Scenario,
+  allocatedUtilization: number,
+  constraint: 'none' | 'voltage' | 'line' | 'transformer' | 'reserve',
+  reason: string
+) {
+  const cooling = scenarioPressure[scenario].cooling;
+  const requestedUtilization = clamp(Math.max(dc.desiredUtilization, dc.actualUtilization), 0.16, 1);
+  const requestedKw = kwForUtilization(dc, cooling, requestedUtilization);
+  const allocatedKw = kwForUtilization(dc, cooling, allocatedUtilization);
+  return {
+    requestedKw,
+    allocatedKw,
+    deferredKw: Math.max(0, requestedKw - allocatedKw),
+    requestedUtilization,
+    allocatedUtilization,
+    batteryDispatchKw: dc.batterySupportKw,
+    constraint,
+    reason,
+  };
+}
+
+function allocationConstraint(session: DemoSession): 'none' | 'voltage' | 'line' | 'transformer' | 'reserve' {
+  if (session.grid.violations.includes('low_voltage') || session.grid.voltageMin < 0.972) return 'voltage';
+  if (session.grid.violations.includes('transformer_overload') || (session.grid.transformerLoading ?? 0) > 0.94) return 'transformer';
+  if (session.grid.violations.includes('line_overload') || session.grid.lineLoadingMax > 0.84) return 'line';
+  if (session.grid.reserveKw < 900) return 'reserve';
+  return 'none';
+}
+
+function legacyKwForDataCenter(dc: DataCenterAgent, coolingFactor: number) {
   const slurmUtilization = dc.slurm.allocatedGpus / Math.max(1, dc.gpuCount);
   const computeKw = dc.gpuCount * dc.gpuKw * Math.max(dc.actualUtilization, slurmUtilization);
   const coolingKw = computeKw * coolingFactor;

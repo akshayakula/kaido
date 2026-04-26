@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { appendPowerFlowResult, applyManualOverride } from '@/lib/simulation';
+import { appendPowerFlowResult, applyGridAgentAllocation, applyManualOverride } from '@/lib/simulation';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
 import { updateSession } from '@/lib/session-store';
 
@@ -30,6 +30,7 @@ export async function POST(
       })
     );
     if (found) {
+      applyGridAgentAllocation(draft);
       draft.grid = await solveWithOpenDss(draft, draft.grid);
       appendPowerFlowResult(draft);
     }

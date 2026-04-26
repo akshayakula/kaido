@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { appendPowerFlowResult, createDataCenter } from '@/lib/simulation';
+import { appendPowerFlowResult, applyGridAgentAllocation, createDataCenter } from '@/lib/simulation';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
 import { updateSession } from '@/lib/session-store';
 
@@ -11,6 +11,7 @@ export async function POST(request: Request, { params }: { params: { sessionId: 
   const session = await updateSession(params.sessionId, async (draft) => {
     const dc = createDataCenter(draft, body.displayName);
     datacenterId = dc.id;
+    applyGridAgentAllocation(draft);
     draft.grid = await solveWithOpenDss(draft, draft.grid);
     appendPowerFlowResult(draft);
   });

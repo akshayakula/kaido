@@ -31,6 +31,11 @@ def scenario_config(scenario: str) -> Dict[str, float]:
 
 
 def datacenter_kw(dc: Dict[str, Any], cooling_factor: float) -> float:
+    allocation = dc.get("gridAllocation") or {}
+    allocated_kw = allocation.get("allocatedKw")
+    if allocated_kw is not None:
+        return max(0.0, float(allocated_kw))
+
     slurm = dc.get("slurm") or {}
     allocated = float(slurm.get("allocatedGpus") or round(float(dc.get("actualUtilization", 0)) * float(dc.get("gpuCount", 1))))
     gpu_count = max(1.0, float(dc.get("gpuCount", 1)))
@@ -81,6 +86,10 @@ def run(payload: Dict[str, Any]) -> Dict[str, Any]:
             "bus": bus,
             "kw": kw,
             "kvar": kvar,
+            "requestedKw": (dc.get("gridAllocation") or {}).get("requestedKw"),
+            "allocatedKw": (dc.get("gridAllocation") or {}).get("allocatedKw"),
+            "deferredKw": (dc.get("gridAllocation") or {}).get("deferredKw"),
+            "allocatedUtilization": (dc.get("gridAllocation") or {}).get("allocatedUtilization"),
             "line": line_name.lower(),
         })
 

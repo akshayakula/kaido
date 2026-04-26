@@ -20,6 +20,7 @@ type GridView = {
     drawLabel: string;
     color: string;
     kw: number;
+    deferredKw: number;
     loadSignal: number;
     queuePressure: number;
     queueLabel: string;
@@ -64,7 +65,7 @@ export function GridMap({ session }: GridMapProps) {
     );
     const drawValues = session.datacenters.map((dc) => {
       const gpuDraw = dc.slurm?.allocatedGpus ?? Math.round(dc.actualUtilization * dc.gpuCount);
-      return Math.max(dc.actualUtilization, gpuDraw / Math.max(1, dc.gpuCount));
+      return Math.min(dc.gridAllocation?.allocatedUtilization ?? 1, Math.max(dc.actualUtilization, gpuDraw / Math.max(1, dc.gpuCount)));
     });
     const maxDraw = Math.max(0.01, ...drawValues);
     const nodes = session.datacenters.map((dc, index) => {
@@ -72,12 +73,12 @@ export function GridMap({ session }: GridMapProps) {
       const relativeDraw = draw / maxDraw;
       const drawClass: DrawClass = relativeDraw > 0.72 ? 'high' : relativeDraw > 0.38 ? 'medium' : 'low';
       const queuePressure = Math.min(1, (dc.queueDepth + (dc.slurm?.pendingJobs ?? 0) * 45 + (dc.slurm?.heldJobs ?? 0) * 70) / 1800);
-      const computeKw = dc.gpuCount * dc.gpuKw * draw;
-      const kw = Math.max(0, dc.baseKw + computeKw - dc.batterySupportKw);
+      const kw = dc.gridAllocation?.allocatedKw ?? Math.max(0, dc.baseKw + dc.gpuCount * dc.gpuKw * draw - dc.batterySupportKw);
+      const deferredKw = dc.gridAllocation?.deferredKw ?? 0;
       const maxKw = Math.max(1, dc.baseKw + dc.gpuCount * dc.gpuKw * 0.95);
       const powerPressure = Math.min(1, kw / maxKw);
       const liveDemand = dc.queueDepth > 0 ? Math.sin((session.tick + index * 4) / 3.2) * 0.08 : 0;
-      const loadSignal = Math.max(0.08, Math.min(1, powerPressure * 0.72 + queuePressure * 0.2 + liveDemand));
+      const loadSignal = Math.max(0.08, Math.min(1, powerPressure * 0.62 + queuePressure * 0.18 + Math.min(0.2, deferredKw / 1200) + liveDemand));
       const lat = center.lat + (dc.lat - center.lat) * 18;
       const lng = center.lng + (dc.lng - center.lng) * 18;
       return {
@@ -88,6 +89,7 @@ export function GridMap({ session }: GridMapProps) {
         drawLabel: drawClass === 'high' ? 'heavy draw' : drawClass === 'medium' ? 'rising draw' : 'light draw',
         color: COLORS[drawClass],
         kw,
+        deferredKw,
         loadSignal,
         queuePressure,
         queueLabel: queuePressure > 0.68 ? 'deep queue' : queuePressure > 0.34 ? 'active queue' : 'short queue',
@@ -305,7 +307,7 @@ export function GridMap({ session }: GridMapProps) {
           <div className={`readout-row ${node.drawClass}`} key={node.dc.id}>
             <b>DC {node.index + 1}{node.speaking ? ' ◉' : ''}</b>
             <span>{node.dc.name}</span>
-            <small>{node.speaking ? 'talking · ' : ''}{Math.round(node.kw)} kW · {node.queueLabel} · {node.dc.queueDepth} queued · {Math.round(node.draw * 100)}% draw</small>
+            <small>{node.speaking ? 'talking · ' : ''}{Math.round(node.kw)} kW allocated · {Math.round(node.deferredKw)} kW deferred · {node.queueLabel}</small>
           </div>
         ))}
       </div>

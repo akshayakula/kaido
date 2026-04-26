@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { appendPowerFlowResult, applyInferenceRequest } from '@/lib/simulation';
+import { appendPowerFlowResult, applyGridAgentAllocation, applyInferenceRequest } from '@/lib/simulation';
 import { addOpenAINegotiationEvent } from '@/lib/openai-agent';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
 import { updateSession } from '@/lib/session-store';
@@ -28,6 +28,7 @@ export async function POST(
   const session = await updateSession(params.sessionId, async (draft) => {
     datacenter = applyInferenceRequest(draft, params.datacenterId, body.requestType!);
     if (datacenter) {
+      applyGridAgentAllocation(draft);
       draft.grid = await solveWithOpenDss(draft, draft.grid);
       appendPowerFlowResult(draft);
       await addOpenAINegotiationEvent(draft, {

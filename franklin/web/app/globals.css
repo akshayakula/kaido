@@ -1531,7 +1531,7 @@ h2 {
 
 .physics-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1.5fr) minmax(70px, 0.6fr) minmax(94px, 0.7fr) minmax(100px, 0.8fr);
+  grid-template-columns: minmax(150px, 1.5fr) minmax(62px, 0.55fr) repeat(3, minmax(82px, 0.7fr)) minmax(98px, 0.8fr);
   gap: 10px;
   padding: 8px 10px;
   border-bottom: 1px solid rgba(228, 226, 201, 0.09);
