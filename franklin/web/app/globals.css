@@ -3592,8 +3592,7 @@ h2 {
 .dashboard-screen.v2 .diagnostics-stack .lower-grid.diagnostics-bottom {
   display: contents;
 }
-.dashboard-screen.v2 .diagnostics-stack > .status-card,
-.dashboard-screen.v2 .diagnostics-stack > .metrics,
+.dashboard-screen.v2 .diagnostics-stack > .grid-readouts-panel,
 .dashboard-screen.v2 .diagnostics-stack > .terminal-panel,
 .dashboard-screen.v2 .diagnostics-stack .gpu-scheduler-panel,
 .dashboard-screen.v2 .diagnostics-stack .negotiation-panel {
@@ -3604,14 +3603,94 @@ h2 {
 }
 
 /* Default positions on the dashboard area */
-.dashboard-screen.v2 .status-card        { top: 0;     right: 0;   width: 240px; }
-.dashboard-screen.v2 .metrics            { top: 130px; right: 0;   width: 280px; }
-.dashboard-screen.v2 .gpu-scheduler-panel{ top: 0;     left: 0;    width: 340px; }
-.dashboard-screen.v2 .negotiation-panel  { bottom: 0;  left: 0;    width: 340px; }
-.dashboard-screen.v2 .terminal-panel     { bottom: 0;  right: 0;   width: 340px; }
+.dashboard-screen.v2 .grid-readouts-panel { top: 0;     right: 0;   width: 360px; }
+.dashboard-screen.v2 .gpu-scheduler-panel { top: 0;     left: 0;    width: 380px; }
+.dashboard-screen.v2 .negotiation-panel   { bottom: 0;  left: 0;    width: 380px; }
+.dashboard-screen.v2 .terminal-panel      { bottom: 0;  right: 0;   width: 380px; }
 
 /* Hide the residual join-card (CTA already lives in the topbar) */
 .dashboard-screen.v2 .diagnostics-stack > .join-card { display: none; }
 
 /* The floating-panel transform still applies on top of the absolute
    default position — drag offsets stack with the default placement. */
+
+.dashboard-screen.v2 .grid-readouts-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-screen.v2 .grid-readouts-panel[data-health="normal"] {
+  border-color: rgba(128, 209, 165, 0.34);
+}
+
+.dashboard-screen.v2 .grid-readouts-panel[data-health="stressed"] {
+  border-color: rgba(242, 211, 107, 0.38);
+}
+
+.dashboard-screen.v2 .grid-readouts-panel[data-health="emergency"] {
+  border-color: rgba(226, 123, 99, 0.42);
+}
+
+.dashboard-screen.v2 .readout-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid rgba(228, 226, 201, 0.1);
+}
+
+.dashboard-screen.v2 .readout-grid .metric {
+  min-height: 52px;
+  padding: 8px;
+}
+
+.dashboard-screen.v2 .readout-grid .metric span {
+  margin-bottom: 4px;
+  font-size: 9px;
+}
+
+.dashboard-screen.v2 .readout-grid .metric b {
+  font-size: 15px;
+}
+
+.dashboard-screen.v2 .grid-readouts-panel .analog-panel {
+  max-height: 300px;
+  overflow: auto;
+}
+
+.dashboard-screen.v2 .gpu-scheduler-panel .agent-list,
+.dashboard-screen.v2 .negotiation-panel .conversation-thread {
+  max-height: 360px !important;
+  overflow: auto !important;
+}
+
+.dashboard-screen.v2 .terminal-panel .dss-commands {
+  max-height: 230px !important;
+  overflow: auto !important;
+  white-space: pre;
+}
+
+.dashboard-screen.v2 .fp-bar {
+  touch-action: none;
+  user-select: none;
+}
+
+@media (max-width: 900px) {
+  .dashboard-screen.v2 .diagnostics-stack {
+    position: relative;
+    inset: auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 12px;
+    pointer-events: auto;
+  }
+
+  .dashboard-screen.v2 .diagnostics-stack > .grid-readouts-panel,
+  .dashboard-screen.v2 .diagnostics-stack > .terminal-panel,
+  .dashboard-screen.v2 .diagnostics-stack .gpu-scheduler-panel,
+  .dashboard-screen.v2 .diagnostics-stack .negotiation-panel {
+    position: relative;
+    inset: auto;
+    width: auto;
+    transform: none !important;
+  }
+}

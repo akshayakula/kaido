@@ -45,10 +45,9 @@ export default function DashboardPage() {
   useEffect(() => {
     type Target = { sel: string; label: string; defaultCollapsed?: boolean };
     const targets: Target[] = [
-      { sel: '.dashboard-screen .status-card',          label: 'Grid status' },
-      { sel: '.dashboard-screen .metrics',              label: 'Metrics' },
-      { sel: '.dashboard-screen .gpu-scheduler-panel',  label: 'GPU scheduler' },
-      { sel: '.dashboard-screen .negotiation-panel',    label: 'Agent conversation' },
+      { sel: '.dashboard-screen .grid-readouts-panel',  label: 'Live grid readouts' },
+      { sel: '.dashboard-screen .gpu-scheduler-panel',  label: 'Data centers / cylinders' },
+      { sel: '.dashboard-screen .negotiation-panel',    label: 'Live A2A chat' },
       { sel: '.dashboard-screen .terminal-panel',       label: 'OpenDSS terminal' },
     ];
 
@@ -93,32 +92,42 @@ export default function DashboardPage() {
         localStorage.setItem('fp:' + target.sel, JSON.stringify({ ...cur, ...patch }));
       };
 
-      // Mouse drag — header is the grab handle.
-      const onMouseDown = (e: MouseEvent) => {
-        if ((e.target as HTMLElement).closest('.fp-collapse')) return;
+      const isInteractiveDragTarget = (node: EventTarget | null) => {
+        const targetEl = node instanceof HTMLElement ? node : null;
+        return !!targetEl?.closest(
+          'button, a, input, select, textarea, [role="button"], .chat-form, .agent-list, .event-list, .conversation-thread, .dss-commands, .analog-panel'
+        );
+      };
+
+      // Pointer drag — panel surface is draggable, while controls keep
+      // their normal click/scroll behavior.
+      const onPointerDown = (e: PointerEvent) => {
+        if (isInteractiveDragTarget(e.target)) return;
         const startX = e.clientX;
         const startY = e.clientY;
         const m = el.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
         const baseX = m ? parseFloat(m[1]) : 0;
         const baseY = m ? parseFloat(m[2]) : 0;
         el.classList.add('fp-dragging');
-        const onMove = (ev: MouseEvent) => {
+        const onMove = (ev: PointerEvent) => {
           const x = baseX + (ev.clientX - startX);
           const y = baseY + (ev.clientY - startY);
           el.style.transform = `translate(${x}px, ${y}px)`;
         };
         const onUp = () => {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
+          document.removeEventListener('pointermove', onMove);
+          document.removeEventListener('pointerup', onUp);
+          document.removeEventListener('pointercancel', onUp);
           el.classList.remove('fp-dragging');
           const mm = el.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
           if (mm) save({ x: parseFloat(mm[1]), y: parseFloat(mm[2]) });
         };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
         e.preventDefault();
       };
-      bar.addEventListener('mousedown', onMouseDown);
+      el.addEventListener('pointerdown', onPointerDown);
 
       const onClick = () => {
         el.classList.toggle('fp-collapsed');
@@ -129,7 +138,7 @@ export default function DashboardPage() {
       btn.addEventListener('click', onClick);
 
       cleanups.push(() => {
-        bar.removeEventListener('mousedown', onMouseDown);
+        el.removeEventListener('pointerdown', onPointerDown);
         btn.removeEventListener('click', onClick);
         bar.remove();
         delete el.dataset.fpInited;
@@ -261,17 +270,21 @@ export default function DashboardPage() {
       </section>
 
       <aside className="side-stack diagnostics-stack">
-          <section className="status-card" data-health={session?.grid.health ?? 'normal'}>
-            <span>Grid status</span>
-            <b>{session?.grid.health.toUpperCase() ?? 'WAITING'}</b>
-            <small>{session ? 'Default shared session' : 'Loading default session'}</small>
-          </section>
-          <section className="metrics">
-            <Metric label="Grid health" value={voltageTone} />
-            <Metric label="Relative draw" value={drawLevel} />
-            <Metric label="Readout" value={solverTone} />
-            <Metric label="Data centers" value={session ? String(session.datacenters.length) : '-'} />
-            <Metric label="Session store" value={storeHealth ? storeHealthLabel(storeHealth) : 'checking'} />
+          <section className="panel grid-readouts-panel" data-health={session?.grid.health ?? 'normal'}>
+            <div className="panel-head compact">
+              <div>
+                <p className="eyebrow">Live grid readouts</p>
+                <h2>{session?.grid.health.toUpperCase() ?? 'Waiting for grid'}</h2>
+              </div>
+              <span className="solver-badge">{solverTone}</span>
+            </div>
+            <div className="readout-grid">
+              <Metric label="Grid health" value={voltageTone} />
+              <Metric label="Relative draw" value={drawLevel} />
+              <Metric label="Data centers" value={session ? String(session.datacenters.length) : '-'} />
+              <Metric label="Session store" value={storeHealth ? storeHealthLabel(storeHealth) : 'checking'} />
+            </div>
+            <GridAnalogReadouts session={session} />
           </section>
           <section className="join-card">
             <p className="eyebrow">Participant entry</p>
@@ -287,8 +300,8 @@ export default function DashboardPage() {
         <section className="panel gpu-scheduler-panel">
           <div className="panel-head compact">
             <div>
-              <p className="eyebrow">Data-center agents</p>
-              <h2>GPU scheduler state</h2>
+              <p className="eyebrow">Data centers / cylinders</p>
+              <h2>Live campus status</h2>
             </div>
           </div>
           <div className="agent-list">
@@ -346,8 +359,8 @@ export default function DashboardPage() {
         <section className="panel negotiation-panel">
           <div className="panel-head compact">
             <div>
-              <p className="eyebrow">A2A negotiation</p>
-              <h2>Agent conversation</h2>
+              <p className="eyebrow">Live A2A chat</p>
+              <h2>Agent negotiation</h2>
             </div>
           </div>
           <div className="conversation-map" aria-label="Agent conversation legend">
@@ -412,17 +425,15 @@ function Metric({ label, value }: { label: string; value: string }) {
 function GridAnalogReadouts({ session }: { session: DemoSession | null }) {
   if (!session) {
     return (
-      <section className="analog-panel">
-        <p className="eyebrow">Analog grid readouts</p>
+      <div className="analog-panel">
         <div className="empty">Waiting for OpenDSS state.</div>
-      </section>
+      </div>
     );
   }
 
   const { grid } = session;
   return (
-    <section className="analog-panel">
-      <p className="eyebrow">Analog grid readouts</p>
+    <div className="analog-panel">
       <AnalogGauge
         label="Voltage floor"
         value={`${grid.voltageMin.toFixed(3)} pu`}
@@ -458,7 +469,7 @@ function GridAnalogReadouts({ session }: { session: DemoSession | null }) {
         tone={grid.lossesKw > 220 ? 'warn' : 'ok'}
         fill={scale(grid.lossesKw, 40, 320)}
       />
-    </section>
+    </div>
   );
 }
 
