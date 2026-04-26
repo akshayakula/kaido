@@ -7,15 +7,27 @@ import { OpenDssPanel } from '@/components/dash/OpenDssPanel';
 import { AnalogReadouts } from '@/components/dash/AnalogReadouts';
 import { A2APanel } from '@/components/dash/A2APanel';
 import { JoinPanel } from '@/components/dash/JoinPanel';
-import { DashPanel } from '@/components/dash/DashPanel';
 import { useDashLayout, useDragSwap } from '@/components/dash/DashGrid';
 import { clearLayout } from '@/lib/dashLayout';
 import type { DemoSession, Scenario } from '@/lib/types';
-import { scenarioBrief, scenarioOptions } from '@/lib/scenarios';
+import { scenarioOptions } from '@/lib/scenarios';
 
 const DEFAULT_SESSION_ID = 'default';
 const PANEL_IDS = ['opendss', 'readouts', 'a2a', 'join'] as const;
 const DEFAULT_ORDER: string[] = [...PANEL_IDS];
+
+const PANEL_ICONS: Record<string, string> = {
+  opendss:  '⚡',
+  readouts: '◐',
+  a2a:      '◌',
+  join:     '+',
+};
+const PANEL_LABELS: Record<string, string> = {
+  opendss:  'Electrical layout',
+  readouts: 'Capacity & health',
+  a2a:      'A2A chat',
+  join:     'Upstash data centers',
+};
 
 export default function DashboardPage() {
   const [session, setSession] = useState<DemoSession | null>(null);
@@ -128,6 +140,28 @@ export default function DashboardPage() {
     return map;
   }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Visibility — X to hide, dropdown to bring back.
+  const [visible, setVisible] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(PANEL_IDS.map((id) => [id, true])),
+  );
+  const [visHydrated, setVisHydrated] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem('dash4:vis');
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, boolean>;
+        setVisible((cur) => ({ ...cur, ...parsed }));
+      }
+    } catch { /* ignore */ }
+    setVisHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (!visHydrated) return;
+    try { window.localStorage.setItem('dash4:vis', JSON.stringify(visible)); } catch { /* ignore */ }
+  }, [visible, visHydrated]);
+  const closePanel = (id: string) => setVisible((v) => ({ ...v, [id]: false }));
+  const togglePanelVis = (id: string) => setVisible((v) => ({ ...v, [id]: !v[id] }));
+
   function resetLayout() {
     clearLayout();
     setLayout({ order: DEFAULT_ORDER, collapsed: {} });
@@ -147,16 +181,13 @@ export default function DashboardPage() {
     const HUD_OFFSET = 64;
     const w = viewportW;
     const h = viewportH;
-    const opendss  = PANEL_SIZE.opendss;
-    const readouts = PANEL_SIZE.readouts;
-    const a2a      = PANEL_SIZE.a2a;
-    const join     = PANEL_SIZE.join;
+    const sz = PANEL_SIZE;
 
     return {
-      opendss:  { left: M,                                  top: HUD_OFFSET },
-      readouts: { left: Math.max(M, w - readouts.w - M),    top: HUD_OFFSET },
-      a2a:      { left: M,                                  top: Math.max(HUD_OFFSET + opendss.h + 12, h - a2a.h - M) },
-      join:     { left: Math.max(M, w - join.w - M),        top: Math.max(HUD_OFFSET + readouts.h + 12, h - join.h - M) },
+      opendss:  { left: M,                                top: HUD_OFFSET },
+      readouts: { left: Math.max(M, w - sz.readouts.w - M), top: HUD_OFFSET },
+      a2a:      { left: M,                                top: Math.max(HUD_OFFSET + sz.opendss.h + 12, h - sz.a2a.h - M) },
+      join:     { left: Math.max(M, w - sz.join.w - M),   top: Math.max(HUD_OFFSET + sz.readouts.h + 12, h - sz.join.h - M) },
     } as Record<string, { left: number; top: number }>;
   }
 
@@ -210,16 +241,32 @@ export default function DashboardPage() {
           </span>
           <span className="dash4-iso" title="Virginia is in PJM ISO">PJM · DOM</span>
           {session && (
-            <select className="dash4-scenario" value={session.scenario} onChange={(e) => changeScenario(e.target.value as Scenario)}>
-              {scenarioOptions.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
+            <CyberDropdown
+              label="scenario"
+              value={session.scenario}
+              options={scenarioOptions.map((s) => ({ value: s.value, label: s.label }))}
+              onChange={(v) => changeScenario(v as Scenario)}
+            />
           )}
-          <button type="button" className="dash4-default" onClick={applyDefaultPositions} title="Default view (no overlap)">Default</button>
+          <PanelsDropdown
+            order={DEFAULT_ORDER}
+            visible={visible}
+            labels={PANEL_LABELS}
+            icons={PANEL_ICONS}
+            onToggle={togglePanelVis}
+          />
+          <button type="button" className="dash4-default" onClick={applyDefaultPositions} title="Default view (no overlap)">
+            <span aria-hidden="true">◇</span>Default
+          </button>
           <button type="button" className="dash4-reset" onClick={resetLayout} title="Reset layout">↺</button>
-          <a className="dash4-link" href="/join">Join →</a>
+          <a className="dash4-link" href="/grid-sensor" title="Open Franklin sensors">
+            <span aria-hidden="true">◉</span>Sensors
+          </a>
+          <a className="dash4-link dash4-link--accent" href="/join">Join →</a>
         </div>
 
         {posHydrated && layout.order.map((id) => {
+          if (!visible[id]) return null;
           const meta = panelMap[id];
           if (!meta) return null;
           const collapsed = !!layout.collapsed[id];
@@ -234,6 +281,7 @@ export default function DashboardPage() {
               title={meta.title}
               collapsed={collapsed}
               onToggle={onToggle}
+              onClose={() => closePanel(id)}
               pos={pos}
               onPosChange={(p) => setPanelPos(id, p)}
               isDragging={dragId === id}
@@ -256,6 +304,7 @@ function FloatingPanel({
   title,
   collapsed,
   onToggle,
+  onClose,
   pos,
   onPosChange,
   isDragging,
@@ -268,6 +317,7 @@ function FloatingPanel({
   title: string;
   collapsed: boolean;
   onToggle: () => void;
+  onClose?: () => void;
   pos: { left: number; top: number };
   onPosChange: (p: { left: number; top: number }) => void;
   isDragging: boolean;
@@ -328,29 +378,147 @@ function FloatingPanel({
           {eyebrow && <p className="eyebrow">{eyebrow}</p>}
           <h2>{title}</h2>
         </div>
-        <button
-          type="button"
-          className="fpanel__chev"
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? 'Expand' : 'Collapse'}
-          onClick={onToggle}
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-            <path
-              d="M3 5 L6 8 L9 5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ transformOrigin: 'center', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 220ms cubic-bezier(.2,.8,.2,1)' }}
-            />
-          </svg>
-        </button>
+        <div className="fpanel__actions">
+          <button
+            type="button"
+            className="fpanel__chev"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? 'Expand' : 'Collapse'}
+            onClick={onToggle}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <path
+                d="M3 5 L6 8 L9 5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ transformOrigin: 'center', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 220ms cubic-bezier(.2,.8,.2,1)' }}
+              />
+            </svg>
+          </button>
+          {onClose && (
+            <button
+              type="button"
+              className="fpanel__close"
+              aria-label="Close panel"
+              onClick={onClose}
+              title="Close (re-open from Panels menu)"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </header>
       <div className="fpanel__body">
         <div className="fpanel__body-inner">{children}</div>
       </div>
     </section>
+  );
+}
+
+// --- Cyber-styled dropdown for the scenario selector ---
+function CyberDropdown({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = options.find((o) => o.value === value);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest('.cyberd')) setOpen(false);
+    };
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
+  }, [open]);
+  return (
+    <div className={`cyberd ${open ? 'cyberd--open' : ''}`}>
+      <button type="button" className="cyberd__btn" onClick={() => setOpen((v) => !v)}>
+        <span className="cyberd__lbl">{label}</span>
+        <span className="cyberd__val">{current?.label ?? value}</span>
+        <span className="cyberd__chev" aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="cyberd__menu" role="listbox">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              role="option"
+              aria-selected={o.value === value}
+              className={`cyberd__opt ${o.value === value ? 'cyberd__opt--on' : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+            >
+              <span className="cyberd__opt-mark" aria-hidden="true">{o.value === value ? '◉' : '○'}</span>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Panels dropdown (icons; click to toggle visibility) ---
+function PanelsDropdown({
+  order,
+  visible,
+  labels,
+  icons,
+  onToggle,
+}: {
+  order: string[];
+  visible: Record<string, boolean>;
+  labels: Record<string, string>;
+  icons: Record<string, string>;
+  onToggle: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const hiddenCount = order.filter((id) => !visible[id]).length;
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest('.cyberd')) setOpen(false);
+    };
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
+  }, [open]);
+  return (
+    <div className={`cyberd cyberd--panels ${open ? 'cyberd--open' : ''}`}>
+      <button type="button" className="cyberd__btn" onClick={() => setOpen((v) => !v)} title="Show or hide panels">
+        <span className="cyberd__lbl">panels</span>
+        <span className="cyberd__val">{order.length - hiddenCount}/{order.length}</span>
+        <span className="cyberd__chev" aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="cyberd__menu" role="menu">
+          {order.map((id) => (
+            <button
+              key={id}
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={!!visible[id]}
+              className={`cyberd__opt ${visible[id] ? 'cyberd__opt--on' : 'cyberd__opt--off'}`}
+              onClick={() => onToggle(id)}
+            >
+              <span className="cyberd__icon" aria-hidden="true">{icons[id] ?? '·'}</span>
+              <span className="cyberd__opt-text">{labels[id] ?? id}</span>
+              <span className="cyberd__check" aria-hidden="true">{visible[id] ? '●' : '○'}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

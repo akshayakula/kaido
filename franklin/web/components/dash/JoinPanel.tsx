@@ -17,6 +17,8 @@ export function JoinPanel({
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [joinUrl, setJoinUrl] = useState('');
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 4;
 
   useEffect(() => {
     setJoinUrl(`${window.location.origin}/join`);
@@ -56,50 +58,81 @@ export function JoinPanel({
 
   return (
     <div className="join2">
-      <div className="join2__qr">
-        <QrSvg value={joinUrl} size={140} />
-        <div className="join2__qr-side">
-          <p className="eyebrow">Scan or share</p>
-          <div className="join2__url">
-            <input readOnly value={joinUrl || 'loading…'} onClick={(e) => e.currentTarget.select()} />
-            <button onClick={copy} disabled={!joinUrl}>{copied ? 'Copied' : 'Copy'}</button>
-          </div>
-          <a className="primary-link" href="/join">Open join page →</a>
-          <p className="join2__count">{session?.datacenters.length ?? 0} data centers joined</p>
+      <div className="join2__topline">
+        <QrSvg value={joinUrl} size={88} />
+        <div className="join2__topline-info">
+          <button type="button" className="join2__copy" onClick={copy} disabled={!joinUrl}>
+            {copied ? '✓ Copied' : 'Copy join link'}
+          </button>
+          <a className="join2__open" href="/join">Open join page ↗</a>
+          <p className="join2__count">
+            <b>{session?.datacenters.length ?? 0}</b> data centers
+          </p>
         </div>
       </div>
 
       <form className="join2__add" onSubmit={add}>
         <input
-          placeholder="Add data center (name optional)"
+          placeholder="add a data center…"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           disabled={busy !== null}
         />
-        <button disabled={busy !== null}>{busy === 'add' ? 'Adding…' : '+ Add'}</button>
+        <button disabled={busy !== null}>{busy === 'add' ? '…' : '+'}</button>
       </form>
 
-      <ul className="join2__list">
-        {session?.datacenters.length ? session.datacenters.map((dc) => (
-          <li key={dc.id} className="join2__item">
-            <div className="join2__item-main">
-              <b>{dc.name}</b>
-              <small>{Math.round(summarizeKw(dc, session.scenario))} kW · {dc.gpuCount} GPU · joined {fmtJoined(dc.joinedAt)}</small>
-            </div>
-            <button
-              type="button"
-              className="join2__del"
-              aria-label={`Remove ${dc.name}`}
-              disabled={busy !== null}
-              onClick={() => remove(dc.id, dc.name)}
-            >
-              {busy === dc.id ? '…' : '×'}
-            </button>
-          </li>
-        )) : (
-          <li className="join2__empty">No data centers in Upstash.</li>
-        )}
-      </ul>
+      {(() => {
+        const all = session?.datacenters ?? [];
+        const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+        const safePage = Math.min(page, totalPages - 1);
+        const slice = all.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+        return (
+          <>
+            <ul className="join2__list">
+              {slice.length ? slice.map((dc) => (
+                <li key={dc.id} className="join2__item">
+                  <div className="join2__item-main">
+                    <b>{dc.name}</b>
+                    <small>{Math.round(summarizeKw(dc, session!.scenario))} kW · {dc.gpuCount} GPU · {fmtJoined(dc.joinedAt)}</small>
+                  </div>
+                  <button
+                    type="button"
+                    className="join2__del"
+                    aria-label={`Remove ${dc.name}`}
+                    disabled={busy !== null}
+                    onClick={() => remove(dc.id, dc.name)}
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </li>
+              )) : (
+                <li className="join2__empty">No data centers in Upstash.</li>
+              )}
+            </ul>
+            {all.length > PAGE_SIZE && (
+              <div className="join2__pager">
+                <button
+                  type="button"
+                  className="join2__pager-btn"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={safePage === 0}
+                  aria-label="Previous page"
+                >‹</button>
+                <span className="join2__pager-info">
+                  page {safePage + 1} / {totalPages} · {all.length} total
+                </span>
+                <button
+                  type="button"
+                  className="join2__pager-btn"
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={safePage >= totalPages - 1}
+                  aria-label="Next page"
+                >›</button>
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }

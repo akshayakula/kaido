@@ -492,33 +492,9 @@ export function GridMap({ session }: GridMapProps) {
     return <div className="grid-empty">Set NEXT_PUBLIC_MAPBOX_TOKEN to render the Franklin globe.</div>;
   }
 
-  const systemTone = session.grid.health === 'emergency' ? 'critical' : session.grid.health === 'stressed' ? 'strained' : 'stable';
-
   return (
     <div className="franklin-globe-grid mapbox-globe-grid" data-health={session.grid.health}>
       <div className="mapbox-globe-canvas" ref={containerRef} aria-label="Mapbox globe with data-center cylinders" />
-      <div className="site-card franklin-site-card">
-        <span>Grid agent</span>
-        <b>{systemTone}</b>
-        <small>{session.site.name} · {session.site.region}</small>
-      </div>
-      <div className="cylinder-readout">
-        <div className="readout-title">Cylinder live read</div>
-        {view.nodes.map((node) => (
-          <div className={`readout-row ${node.drawClass}`} key={node.dc.id}>
-            <b>DC {node.index + 1}{node.speaking ? ' ◉' : ''}</b>
-            <span>{node.dc.name}</span>
-            <small>{node.speaking ? 'talking · ' : ''}{Math.round(node.kw)} kW allocated · {Math.round(node.deferredKw)} kW deferred · {node.queueLabel}</small>
-          </div>
-        ))}
-      </div>
-      <div className="map-legend">
-        <span><i className="legend-dot low" /> light draw</span>
-        <span><i className="legend-dot medium" /> rising draw</span>
-        <span><i className="legend-dot high" /> heavy draw</span>
-        <span><i className="legend-dot talking" /> talking</span>
-      </div>
-      <div className="map-note">Cylinder height follows queue depth and GPU draw; ◉ marks recently talking agents.</div>
     </div>
   );
 }
