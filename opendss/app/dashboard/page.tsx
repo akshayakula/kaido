@@ -105,8 +105,8 @@ export default function DashboardPage() {
   const dssPreview = session ? buildDssPreview(session) : null;
 
   return (
-    <main className="shell dashboard">
-      <header className="hero">
+    <main className="dashboard-screen">
+      <header className="hero operator-topbar">
         <div>
           <p className="eyebrow">OpenDSS Agent Demo · Franklin Grid Sense</p>
           <h1>FRANKLIN GRID</h1>
@@ -117,8 +117,8 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <section className="dashboard-grid">
-        <div className="map-panel">
+      <section className="dashboard-grid dashboard-stage">
+        <div className="map-panel globe-panel">
           <div className="panel-head">
             <div>
               <p className="eyebrow">Grid site</p>
@@ -133,7 +133,7 @@ export default function DashboardPage() {
           <div className="map-wrap"><GridMap session={session} /></div>
         </div>
 
-        <aside className="side-stack">
+        <aside className="side-stack diagnostics-stack">
           <section className="status-card" data-health={session?.grid.health ?? 'normal'}>
             <span>Grid status</span>
             <b>{session?.grid.health.toUpperCase() ?? 'WAITING'}</b>
@@ -157,7 +157,7 @@ export default function DashboardPage() {
         </aside>
       </section>
 
-      <section className="lower-grid">
+      <section className="lower-grid diagnostics-bottom">
         <section className="panel">
           <div className="panel-head compact">
             <div>
@@ -245,7 +245,7 @@ export default function DashboardPage() {
         </section>
       </section>
 
-      <section className="panel dss-panel">
+      <section className="panel dss-panel terminal-panel">
         <div className="panel-head compact">
           <div>
             <p className="eyebrow">OpenDSS system</p>
