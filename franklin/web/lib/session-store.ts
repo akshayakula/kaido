@@ -80,6 +80,23 @@ function assemble(meta: MetaBlob, grid: GridState | null, dcs: DataCenterAgent[]
   });
 }
 
+/**
+ * Capture a snapshot of current event IDs. Pair with `newEventsSince` to
+ * compute which events were added during a route's mutations — `addEvent`
+ * unshifts (newest-first) and caps to 80, so a length-based diff is wrong.
+ */
+export function snapshotEventIds(session: DemoSession): Set<string> {
+  return new Set(session.events.map((e) => e.id));
+}
+
+/**
+ * Returns events added since the snapshot, in chronological order
+ * (oldest of the new batch first) so they can be RPUSH'd in order.
+ */
+export function newEventsSince(session: DemoSession, before: Set<string>): AgentEvent[] {
+  return session.events.filter((e) => !before.has(e.id)).slice().reverse();
+}
+
 export async function getSession(id: string): Promise<DemoSession | null> {
   if (!redis) return null;
 
@@ -97,7 +114,11 @@ export async function getSession(id: string): Promise<DemoSession | null> {
 
   if (meta) {
     const dcs = dcsHash ? Object.values(dcsHash) : [];
-    return assemble(meta, grid, dcs, events ?? []);
+    // Redis stores events chronologically (RPUSH-appended). The simulation
+    // code uses a newest-first in-memory convention (addEvent unshifts). Flip
+    // here so consumers see the same shape as the in-memory session.
+    const orderedEvents = (events ?? []).slice().reverse();
+    return assemble(meta, grid, dcs, orderedEvents);
   }
 
   // One-shot migration from legacy `session:{id}:state` blob.

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { appendPowerFlowResult, applyGridAgentAllocation, applyInferenceRequest } from '@/lib/simulation';
 import { addOpenAINegotiationEvent } from '@/lib/openai-agent';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
-import { commitSession, getSession } from '@/lib/session-store';
+import { commitSession, getSession, newEventsSince, snapshotEventIds } from '@/lib/session-store';
 import type { RequestType } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -25,7 +25,7 @@ export async function POST(
 
   const session = await getSession(params.sessionId);
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
-  const eventsBefore = session.events.length;
+  const beforeEventIds = snapshotEventIds(session);
 
   const datacenter = applyInferenceRequest(session, params.datacenterId, body.requestType);
   if (!datacenter) return NextResponse.json({ error: 'Data center not found' }, { status: 404 });
@@ -38,7 +38,7 @@ export async function POST(
     meta: true,
     grid: true,
     dcIdsToWrite: session.datacenters.map((dc) => dc.id),
-    eventsToAppend: session.events.slice(eventsBefore),
+    eventsToAppend: newEventsSince(session, beforeEventIds),
   });
   return NextResponse.json({ session });
 }

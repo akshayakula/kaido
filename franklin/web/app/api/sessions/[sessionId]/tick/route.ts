@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { appendPowerFlowResult, tickSession } from '@/lib/simulation';
 import { addOpenAINegotiationEvent, runGridAllocatorToolCall } from '@/lib/openai-agent';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
-import { commitSession, getSession, withTickLock } from '@/lib/session-store';
+import { commitSession, getSession, newEventsSince, snapshotEventIds, withTickLock } from '@/lib/session-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +10,7 @@ export async function POST(_: Request, { params }: { params: { sessionId: string
   const outcome = await withTickLock(params.sessionId, async () => {
     const session = await getSession(params.sessionId);
     if (!session) return null;
-    const eventsBefore = session.events.length;
+    const beforeEventIds = snapshotEventIds(session);
 
     tickSession(session);
     session.grid = await solveWithOpenDss(session, session.grid);
@@ -24,7 +24,7 @@ export async function POST(_: Request, { params }: { params: { sessionId: string
       meta: true,
       grid: true,
       dcIdsToWrite: session.datacenters.map((dc) => dc.id),
-      eventsToAppend: session.events.slice(eventsBefore),
+      eventsToAppend: newEventsSince(session, beforeEventIds),
     });
     return session;
   });

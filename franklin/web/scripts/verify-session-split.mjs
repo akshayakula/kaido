@@ -56,13 +56,15 @@ async function main() {
   assert(!stillThere, 'deleted DC stays deleted after concurrent ticks');
 
   // Test 3: concurrent chats — events log keeps both
-  const before = state.events.length;
+  // session.events is newest-first (simulation prepends). Use ID-set diff.
+  const beforeIds = new Set(state.events.map((e) => e.id));
   await Promise.all([
     post('/api/sessions/default/chat', { message: 'race-chat-A' }),
     post('/api/sessions/default/chat', { message: 'race-chat-B' }),
   ]);
   state = (await get('/api/sessions/default/state')).session;
-  const bodies = state.events.slice(before).map((e) => e.body).join(' | ');
+  const newOnes = state.events.filter((e) => !beforeIds.has(e.id));
+  const bodies = newOnes.map((e) => e.body).join(' | ');
   assert(bodies.includes('race-chat-A') && bodies.includes('race-chat-B'),
     `both concurrent chats present in events (got: ${bodies})`);
 

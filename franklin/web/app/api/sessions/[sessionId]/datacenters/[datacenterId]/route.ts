@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { addEvent, appendPowerFlowResult, applyGridAgentAllocation } from '@/lib/simulation';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
-import { commitSession, getSession, removeDc } from '@/lib/session-store';
+import { commitSession, getSession, newEventsSince, removeDc, snapshotEventIds } from '@/lib/session-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,7 @@ export async function DELETE(
   if (idx === -1) return NextResponse.json({ error: 'Data center not found' }, { status: 404 });
 
   const removedName = session.datacenters[idx].name;
-  const eventsBefore = session.events.length;
+  const beforeEventIds = snapshotEventIds(session);
 
   // Drop from Upstash hash FIRST so a racing tick that reads after this point won't see the DC.
   await removeDc(params.sessionId, params.datacenterId);
@@ -30,7 +30,7 @@ export async function DELETE(
     meta: true,
     grid: true,
     dcIdsToWrite: session.datacenters.map((dc) => dc.id),
-    eventsToAppend: session.events.slice(eventsBefore),
+    eventsToAppend: newEventsSince(session, beforeEventIds),
   });
   return NextResponse.json({ session, removed: removedName });
 }
