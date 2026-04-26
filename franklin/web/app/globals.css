@@ -3441,3 +3441,4 @@ h2 {
   display: none !important;
 }
 .dashboard-screen.v2 .cylinder-readout { display: none !important; }
+.dashboard-screen.v2 .map-legend { display: none !important; }
