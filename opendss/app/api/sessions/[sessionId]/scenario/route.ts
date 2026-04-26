@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { setScenario } from '@/lib/simulation';
 import { addOpenAINegotiationEvent } from '@/lib/openai-agent';
+import { solveWithOpenDss } from '@/lib/opendss/runner';
 import { updateSession } from '@/lib/session-store';
 import type { Scenario } from '@/lib/types';
 
@@ -15,6 +16,7 @@ export async function POST(request: Request, { params }: { params: { sessionId: 
   }
   const session = await updateSession(params.sessionId, async (draft) => {
     setScenario(draft, body.scenario!);
+    draft.grid = await solveWithOpenDss(draft, draft.grid);
     await addOpenAINegotiationEvent(draft, { kind: 'scenario_change' });
   });
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });

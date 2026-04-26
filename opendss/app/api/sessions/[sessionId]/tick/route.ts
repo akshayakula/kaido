@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { tickSession } from '@/lib/simulation';
 import { addOpenAINegotiationEvent } from '@/lib/openai-agent';
+import { solveWithOpenDss } from '@/lib/opendss/runner';
 import { updateSession } from '@/lib/session-store';
 
 export const dynamic = 'force-dynamic';
@@ -8,6 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(_: Request, { params }: { params: { sessionId: string } }) {
   const session = await updateSession(params.sessionId, async (draft) => {
     tickSession(draft);
+    draft.grid = await solveWithOpenDss(draft, draft.grid);
     if (draft.datacenters.length > 0 && draft.tick % 8 === 0 && draft.grid.health !== 'normal') {
       await addOpenAINegotiationEvent(draft, { kind: 'grid_tick' });
     }

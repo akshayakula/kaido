@@ -32,6 +32,9 @@ export type GridState = {
   lossesKw: number;
   frequencyHz: number;
   violations: string[];
+  solver?: 'opendss' | 'approximate';
+  feederKw?: number;
+  transformerLoading?: number;
 };
 
 export type SlurmScheduler = {

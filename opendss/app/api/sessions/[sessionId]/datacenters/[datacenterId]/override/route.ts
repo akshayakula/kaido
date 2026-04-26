@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { applyManualOverride } from '@/lib/simulation';
+import { solveWithOpenDss } from '@/lib/opendss/runner';
 import { updateSession } from '@/lib/session-store';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,7 @@ export async function POST(
   }
 
   let found = false;
-  const session = await updateSession(params.sessionId, (draft) => {
+  const session = await updateSession(params.sessionId, async (draft) => {
     found = Boolean(
       applyManualOverride(draft, params.datacenterId, {
         schedulerCap: body.schedulerCap,
@@ -28,6 +29,7 @@ export async function POST(
         instruction: body.instruction?.trim().slice(0, 240),
       })
     );
+    if (found) draft.grid = await solveWithOpenDss(draft, draft.grid);
   });
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   if (!found) return NextResponse.json({ error: 'Data center not found' }, { status: 404 });

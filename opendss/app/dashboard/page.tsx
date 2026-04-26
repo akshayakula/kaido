@@ -93,6 +93,7 @@ export default function DashboardPage() {
   const drawLevel = session ? getDrawLevel(session) : 'waiting';
   const voltageTone =
     !session ? 'waiting' : session.grid.health === 'normal' ? 'steady' : session.grid.health === 'stressed' ? 'strained' : 'critical';
+  const solverTone = session?.grid.solver === 'opendss' ? 'OpenDSS solve' : session ? 'approximate' : 'waiting';
 
   return (
     <main className="shell dashboard">
@@ -131,7 +132,7 @@ export default function DashboardPage() {
           <section className="metrics">
             <Metric label="Grid health" value={voltageTone} />
             <Metric label="Relative draw" value={drawLevel} />
-            <Metric label="Headroom" value={session ? (session.grid.reserveKw > 1600 ? 'ample' : session.grid.reserveKw > 700 ? 'tight' : 'thin') : '-'} />
+            <Metric label="Readout" value={solverTone} />
             <Metric label="Data centers" value={session ? String(session.datacenters.length) : '-'} />
           </section>
           <section className="join-card">

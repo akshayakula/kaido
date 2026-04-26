@@ -113,6 +113,7 @@ export function DataCenterClient() {
             <Metric label="Latency" value={`${datacenter.latencyMs} ms`} />
             <Metric label="Battery" value={`${Math.round(datacenter.batterySoc * 100)}%`} />
             <Metric label="Grid support" value={`${Math.round(datacenter.batterySupportKw)} kW`} />
+            <Metric label="Grid readout" value={session?.grid.solver === 'opendss' ? 'OpenDSS' : 'approx'} />
           </section>
 
           <section className="panel slurm-panel">
