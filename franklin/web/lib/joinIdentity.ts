@@ -8,33 +8,35 @@
  *   operator deleted the DC and clear the stale entry.
  */
 
-export type JoinIdentity = { sessionId: string; datacenterId: string };
+export type JoinIdentity = { sessionId: string; datacenterId: string; displayName?: string };
 
-function key(sessionId: string) {
-  return `dc:${sessionId}`;
-}
+function idKey(sessionId: string) { return `dc:${sessionId}`; }
+function nameKey(sessionId: string) { return `dc:${sessionId}:name`; }
 
 export function loadJoinIdentity(sessionId: string): JoinIdentity | null {
   if (typeof window === 'undefined') return null;
   try {
-    const dcId = window.localStorage.getItem(key(sessionId));
+    const dcId = window.localStorage.getItem(idKey(sessionId));
     if (!dcId) return null;
-    return { sessionId, datacenterId: dcId };
+    const displayName = window.localStorage.getItem(nameKey(sessionId)) ?? undefined;
+    return { sessionId, datacenterId: dcId, displayName };
   } catch {
     return null;
   }
 }
 
-export function saveJoinIdentity(sessionId: string, datacenterId: string) {
+export function saveJoinIdentity(sessionId: string, datacenterId: string, displayName?: string) {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(key(sessionId), datacenterId);
+    window.localStorage.setItem(idKey(sessionId), datacenterId);
+    if (displayName) window.localStorage.setItem(nameKey(sessionId), displayName);
   } catch { /* quota / private mode */ }
 }
 
 export function clearJoinIdentity(sessionId: string) {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(key(sessionId));
+    window.localStorage.removeItem(idKey(sessionId));
+    window.localStorage.removeItem(nameKey(sessionId));
   } catch { /* ignore */ }
 }

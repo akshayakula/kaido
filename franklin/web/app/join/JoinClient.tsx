@@ -64,7 +64,7 @@ export function JoinClient() {
         setError(data.error || 'Could not join the default grid session.');
         return;
       }
-      saveJoinIdentity(data.sessionId, data.datacenterId);
+      saveJoinIdentity(data.sessionId, data.datacenterId, displayName.trim() || undefined);
       if ('session' in data && data.session) {
         try {
           window.localStorage.setItem(

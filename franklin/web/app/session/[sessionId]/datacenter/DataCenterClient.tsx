@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import type { DataCenterAgent, DemoSession, RequestType } from '@/lib/types';
-import { clearJoinIdentity, saveJoinIdentity } from '@/lib/joinIdentity';
+import { clearJoinIdentity, loadJoinIdentity, saveJoinIdentity } from '@/lib/joinIdentity';
 
 const requests: { type: RequestType; label: string; detail: string }[] = [
   { type: 'standard_inference', label: 'Standard inference', detail: 'Normal chat traffic' },
@@ -19,7 +19,13 @@ export function DataCenterClient() {
   const [session, setSession] = useState<DemoSession | null>(null);
   const [busy, setBusy] = useState<RequestType | null>(null);
   const [chatMessage, setChatMessage] = useState('');
-  const datacenterId = search.get('dc') ?? '';
+  const [datacenterId, setDatacenterId] = useState<string>(search.get('dc') ?? '');
+  const [reconnecting, setReconnecting] = useState(false);
+  const reconnectInFlight = useRef(false);
+  // Source of truth for "the id we currently belong to" — updates synchronously
+  // so a stale interval tick doesn't trigger a second reconnect after the first.
+  const liveDcId = useRef(datacenterId);
+  useEffect(() => { liveDcId.current = datacenterId; }, [datacenterId]);
 
   useEffect(() => {
     if (params.sessionId && datacenterId) {
@@ -73,10 +79,49 @@ export function DataCenterClient() {
   );
 
   async function refresh() {
-    const response = await fetch(`/api/sessions/${params.sessionId}/state`);
-    if (!response.ok) return;
+    let response = await fetch(`/api/sessions/${params.sessionId}/state`);
+    // Session was wiped (TTL/manual). Bootstrap a new one and continue.
+    if (response.status === 404) {
+      await fetch('/api/sessions');
+      response = await fetch(`/api/sessions/${params.sessionId}/state`);
+      if (!response.ok) return;
+    } else if (!response.ok) {
+      return;
+    }
     const data = (await response.json()) as { session: DemoSession };
     setSession(data.session);
+    // If our DC disappeared (operator delete or session reseed), transparently
+    // re-register with the saved name and update the URL + localStorage.
+    const stillExists = data.session.datacenters.some((dc) => dc.id === liveDcId.current);
+    if (!stillExists && !reconnectInFlight.current) {
+      reconnectInFlight.current = true;
+      setReconnecting(true);
+      try {
+        const saved = loadJoinIdentity(params.sessionId);
+        const displayName = saved?.displayName;
+        const r = await fetch(`/api/sessions/${params.sessionId}/datacenters`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ displayName }),
+        });
+        if (r.ok) {
+          const j = (await r.json()) as { datacenterId: string; session: DemoSession };
+          saveJoinIdentity(params.sessionId, j.datacenterId, displayName);
+          liveDcId.current = j.datacenterId;
+          setDatacenterId(j.datacenterId);
+          setSession(j.session);
+          // Replace URL so a refresh keeps the new id without a server roundtrip.
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('dc', j.datacenterId);
+            window.history.replaceState(null, '', url.toString());
+          }
+        }
+      } finally {
+        reconnectInFlight.current = false;
+        setReconnecting(false);
+      }
+    }
   }
 
   async function sendRequest(requestType: RequestType) {
@@ -129,7 +174,13 @@ export function DataCenterClient() {
       </header>
 
       {!datacenter ? (
-        <section className="panel empty-state">This data-center agent was not found in the session.</section>
+        <section className="panel empty-state">
+          {reconnecting
+            ? 'Reconnecting to the grid…'
+            : session
+              ? 'Reconnecting…'
+              : 'Loading session…'}
+        </section>
       ) : (
         <section className="phone-grid">
           <article className="status-card" data-health={session?.grid.health ?? 'normal'}>
