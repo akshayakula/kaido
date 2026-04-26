@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { GridMap } from '@/components/GridMap';
+import { FranklinLiveSensor } from '@/components/FranklinLiveSensor';
 import type { AgentEvent, DataCenterAgent, DemoSession, Scenario } from '@/lib/types';
 import { summarizeKw } from '@/lib/simulation';
 import { scenarioBrief, scenarioLabel, scenarioOptions } from '@/lib/scenarios';
@@ -49,6 +50,7 @@ export default function DashboardPage() {
       { sel: '.dashboard-screen .gpu-scheduler-panel',  label: 'Data centers / cylinders' },
       { sel: '.dashboard-screen .negotiation-panel',    label: 'Live A2A chat' },
       { sel: '.dashboard-screen .terminal-panel',       label: 'OpenDSS terminal' },
+      { sel: '.dashboard-screen .franklin-live-panel',  label: 'Franklin sensor 1' },
     ];
 
     const cleanups: Array<() => void> = [];
@@ -250,6 +252,8 @@ export default function DashboardPage() {
           <a className="hdr-btn hdr-btn--primary" href="/join">Join as data center →</a>
         </div>
       </header>
+
+      <FranklinLiveSensor />
 
       <section className="dashboard-grid dashboard-stage">
         <div className="map-panel globe-panel">

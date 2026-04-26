@@ -2936,6 +2936,444 @@ h2 {
   box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.18);
 }
 
+/* Strong static highlight for the live hardware sensor when fresh (<30 min). */
+.sensor-card--device.sensor-card--live {
+  border-color: rgba(52, 211, 153, 0.85) !important;
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.08), rgba(52, 211, 153, 0.02));
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.7), 0 0 22px rgba(52, 211, 153, 0.4);
+}
+.sensor-card--device.sensor-card--live .sensor-card__live-badge {
+  background: rgb(52, 211, 153);
+  color: #0a0a0a;
+}
+
+/* Franklin live sensor panel pinned to the left of the dashboard */
+.dashboard-screen .franklin-live-panel {
+  position: absolute;
+  left: 18px;
+  top: 156px;
+  width: 320px;
+  z-index: 10;
+  padding: 14px 14px 16px;
+  background: rgba(8, 9, 6, 0.62);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(228, 226, 201, 0.18);
+}
+.dashboard-screen .franklin-live-panel.fp-card {
+  /* fp-card chrome adds its own header bar; keep our internal padding */
+}
+
+/* Prominent overall-health score for each sensor card */
+.sensor-overall {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sensor-overall__label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sensor-overall__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sensor-overall__score {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.sensor-overall__unit {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.55;
+  margin-left: 4px;
+  letter-spacing: 0;
+}
+.sensor-overall__bar {
+  flex: 1;
+}
+
+/* Audio analysis section on each sensor card */
+.sensor-audio {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(228, 226, 201, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sensor-audio__row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+.sensor-audio__play {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(228, 226, 201, 0.04);
+  border: 1px solid rgba(216, 222, 192, 0.35);
+  color: var(--target);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  letter-spacing: 0;
+}
+.sensor-audio__play:hover {
+  background: rgba(216, 222, 192, 0.1);
+  border-color: rgba(216, 222, 192, 0.6);
+}
+.sensor-audio__play--on {
+  background: rgba(52, 211, 153, 0.18);
+  border-color: rgb(52, 211, 153);
+  color: rgb(52, 211, 153);
+}
+.sensor-card--live .sensor-audio__play {
+  border-color: rgba(52, 211, 153, 0.7);
+  color: rgb(52, 211, 153);
+}
+.sensor-audio__wave {
+  flex: 1;
+  height: 36px;
+  display: block;
+  background: rgba(228, 226, 201, 0.04);
+}
+.sensor-audio__wave path {
+  fill: rgba(216, 222, 192, 0.55);
+  stroke: rgba(216, 222, 192, 0.85);
+  stroke-width: 0.6;
+}
+.sensor-card--live .sensor-audio__wave path {
+  fill: rgba(52, 211, 153, 0.55);
+  stroke: rgb(52, 211, 153);
+  filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.55));
+}
+.sensor-audio__btn {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--target);
+  border: 1px solid rgba(216, 222, 192, 0.35);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+.sensor-audio__btn:hover {
+  background: rgba(216, 222, 192, 0.08);
+  border-color: rgba(216, 222, 192, 0.6);
+}
+.sensor-audio__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* The recalibrate <button> shouldn't use the `font` shorthand — that would
+   reset the 11px font-size set on .sensor-audio__btn. Just inherit family
+   from the page so it matches the audio analysis link. */
+.sensor-audio__btn--alt {
+  font-family: inherit;
+  cursor: pointer;
+}
+.sensor-audio__btn--alt:disabled { opacity: 0.7; cursor: default; }
+.sensor-audio__btn--sending {
+  background: rgba(216, 222, 192, 0.06);
+  border-color: rgba(216, 222, 192, 0.5);
+}
+.sensor-audio__btn--queued {
+  background: rgba(52, 211, 153, 0.18);
+  border-color: rgb(52, 211, 153);
+  color: rgb(52, 211, 153);
+}
+.sensor-audio__btn--error {
+  background: rgba(226, 123, 99, 0.18);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* Sensitivity sliders (temp + mic) for each sensor card */
+.sensitivity {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: rgba(228, 226, 201, 0.04);
+  border: 1px solid rgba(228, 226, 201, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sensitivity__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sensitivity__state { font-size: 10px; letter-spacing: 0.05em; text-transform: none; }
+.sensitivity__state--sending { color: var(--muted); }
+.sensitivity__state--ok      { color: rgb(52, 211, 153); }
+.sensitivity__state--error   { color: var(--red); }
+.sensitivity__row {
+  display: grid;
+  grid-template-columns: 32px 1fr 18px;
+  align-items: center;
+  gap: 8px;
+}
+.sensitivity__label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--target);
+  opacity: 0.8;
+}
+.sensitivity__val {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--target);
+}
+.sensitivity input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: rgba(228, 226, 201, 0.18);
+  outline: none;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.sensitivity input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--target);
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.sensitivity input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--target);
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.sensor-card--live .sensitivity input[type="range"]::-webkit-slider-thumb { background: rgb(52, 211, 153); }
+.sensor-card--live .sensitivity input[type="range"]::-moz-range-thumb     { background: rgb(52, 211, 153); }
+
+/* Recalibrate popover that holds the sensitivity sliders + confirm.
+   inline-flex column so the trigger button keeps its natural (audio-link)
+   size and the panel drops underneath without stretching the button. */
+.recal {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  align-self: flex-start;
+}
+.recal__panel {
+  margin-top: 8px;
+  padding: 10px;
+  background: rgba(8, 9, 6, 0.7);
+  border: 1px solid rgba(228, 226, 201, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 240px;
+}
+.recal__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.recal__err {
+  color: var(--red);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+/* Primary variant (Confirm) — green, mirrors the audio-panel primary button. */
+.sensor-audio__btn--primary {
+  border-color: rgba(52, 211, 153, 0.7);
+  color: rgb(52, 211, 153);
+}
+.sensor-audio__btn--primary:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgb(52, 211, 153);
+}
+
+/* Inline SAM-Audio analysis panel under each sensor card */
+.audio-panel {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(8, 9, 6, 0.55);
+  border: 1px solid rgba(228, 226, 201, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12px;
+}
+.audio-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.audio-panel__header code {
+  background: rgba(228, 226, 201, 0.06);
+  padding: 1px 6px;
+  font-family: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--target);
+}
+.audio-panel__state {
+  padding: 2px 8px;
+  border: 1px solid rgba(228, 226, 201, 0.25);
+  font-weight: 700;
+}
+.audio-panel__state--idle      { color: var(--muted); }
+.audio-panel__state--uploading,
+.audio-panel__state--running   { color: rgb(52, 211, 153); border-color: rgba(52, 211, 153, 0.55); animation: sensor-pulse 1.6s ease-in-out infinite; }
+.audio-panel__state--done      { color: rgb(52, 211, 153); border-color: rgba(52, 211, 153, 0.55); }
+.audio-panel__state--error     { color: var(--red); border-color: var(--red); }
+.audio-panel__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.audio-panel__row--actions { gap: 10px; }
+.audio-panel__prompts {
+  flex: 1;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  background: rgba(228, 226, 201, 0.04);
+  border: 1px solid rgba(228, 226, 201, 0.18);
+  color: var(--target);
+}
+.audio-panel__prompts:focus { outline: 1px solid rgba(216, 222, 192, 0.5); }
+.audio-panel__btn {
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--target);
+  border: 1px solid rgba(216, 222, 192, 0.35);
+  cursor: pointer;
+}
+.audio-panel__btn:hover:not(:disabled) {
+  background: rgba(216, 222, 192, 0.08);
+  border-color: rgba(216, 222, 192, 0.6);
+}
+.audio-panel__btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.audio-panel__btn--primary {
+  border-color: rgba(52, 211, 153, 0.7);
+  color: rgb(52, 211, 153);
+}
+.audio-panel__btn--primary:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.1);
+}
+.audio-panel__file {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px dashed rgba(216, 222, 192, 0.35);
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+.audio-panel__file input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.audio-panel__error {
+  color: var(--red);
+  border: 1px solid var(--red);
+  padding: 6px 8px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 11px;
+}
+.audio-panel__log {
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(228, 226, 201, 0.12);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.audio-panel__log-line { color: var(--target); opacity: 0.85; }
+.audio-panel__log-line--stdout { color: var(--target); }
+.audio-panel__log-line--error  { color: var(--red); }
+.audio-panel__log-line--log    { color: rgb(52, 211, 153); }
+.audio-panel__results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px dashed rgba(228, 226, 201, 0.18);
+  padding-top: 10px;
+}
+.audio-panel__results-title {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.audio-panel__result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.audio-panel__result-label {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--target);
+}
+.audio-panel__result-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.audio-panel__result-tag {
+  display: inline-block;
+  width: 64px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.audio-panel__result-row audio {
+  flex: 1;
+  height: 32px;
+}
+
 /* When the two inner lower-grid panels are wired as independent
    floating windows, give each a translucent backdrop so they read
    like separate cards rather than two halves of one block. */
