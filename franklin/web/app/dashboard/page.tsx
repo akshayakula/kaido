@@ -212,13 +212,18 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const defaults = computeDefaults(window.innerWidth, window.innerHeight);
-    let next: Record<string, { left: number; top: number }> = { ...defaults };
+    const computed = computeDefaults(window.innerWidth, window.innerHeight);
+    let next: Record<string, { left: number; top: number }> = { ...computed };
     try {
+      const userDefaults = window.localStorage.getItem('dash4:pos:defaults');
+      if (userDefaults) {
+        const parsed = JSON.parse(userDefaults) as Record<string, { left: number; top: number }>;
+        next = { ...computed, ...parsed };
+      }
       const raw = window.localStorage.getItem('dash4:pos:all');
       if (raw) {
         const parsed = JSON.parse(raw) as Record<string, { left: number; top: number }>;
-        next = { ...defaults, ...parsed };
+        next = { ...next, ...parsed };
       }
     } catch { /* ignore */ }
     setPositions(next);
@@ -232,10 +237,22 @@ export default function DashboardPage() {
 
   function applyDefaultPositions() {
     if (typeof window === 'undefined') return;
-    const defaults = computeDefaults(window.innerWidth, window.innerHeight);
-    setPositions(defaults);
+    let target: Record<string, { left: number; top: number }> | null = null;
+    try {
+      const raw = window.localStorage.getItem('dash4:pos:defaults');
+      if (raw) target = JSON.parse(raw);
+    } catch { /* ignore */ }
+    const next = target ?? computeDefaults(window.innerWidth, window.innerHeight);
+    setPositions(next);
     setLayout({ order: DEFAULT_ORDER, collapsed: {} });
-    try { window.localStorage.removeItem('dash4:pos:all'); } catch { /* ignore */ }
+    try { window.localStorage.setItem('dash4:pos:all', JSON.stringify(next)); } catch { /* ignore */ }
+  }
+
+  function saveAsDefault() {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem('dash4:pos:defaults', JSON.stringify(positions));
+    } catch { /* ignore */ }
   }
 
   function setPanelPos(id: string, p: { left: number; top: number }) {
@@ -270,8 +287,11 @@ export default function DashboardPage() {
             icons={PANEL_ICONS}
             onToggle={togglePanelVis}
           />
-          <button type="button" className="dash4-default" onClick={applyDefaultPositions} title="Default view (no overlap)">
+          <button type="button" className="dash4-default" onClick={applyDefaultPositions} title="Apply default positions">
             <span aria-hidden="true">◇</span>Default
+          </button>
+          <button type="button" className="dash4-default" onClick={saveAsDefault} title="Save current arrangement as the default">
+            <span aria-hidden="true">⌂</span>Save as default
           </button>
           <button
             type="button"
