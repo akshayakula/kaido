@@ -6544,3 +6544,10 @@ h2 {
   .grid-deep__split,
   .grid-deep__notes { padding-left: 18px; padding-right: 18px; }
 }
+
+/* Hide-all toggle (uses dash4-default styling) */
+.dashboard-screen.v4 .dash4-default--off {
+  border-color: rgba(95, 211, 138, 0.5);
+  color: var(--tone-ok);
+  box-shadow: 0 0 0 1px rgba(95, 211, 138, 0.2), 0 0 12px rgba(95, 211, 138, 0.18);
+}

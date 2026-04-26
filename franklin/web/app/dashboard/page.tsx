@@ -169,6 +169,11 @@ export default function DashboardPage() {
   }, [visible, visHydrated]);
   const closePanel = (id: string) => setVisible((v) => ({ ...v, [id]: false }));
   const togglePanelVis = (id: string) => setVisible((v) => ({ ...v, [id]: !v[id] }));
+  const allHidden = PANEL_IDS.every((id) => !visible[id]);
+  const toggleAllPanels = () => {
+    const next = allHidden;
+    setVisible(Object.fromEntries(PANEL_IDS.map((id) => [id, next])));
+  };
 
   function resetLayout() {
     clearLayout();
@@ -267,6 +272,15 @@ export default function DashboardPage() {
           />
           <button type="button" className="dash4-default" onClick={applyDefaultPositions} title="Default view (no overlap)">
             <span aria-hidden="true">◇</span>Default
+          </button>
+          <button
+            type="button"
+            className={`dash4-default ${allHidden ? 'dash4-default--off' : ''}`}
+            onClick={toggleAllPanels}
+            title={allHidden ? 'Show all panels' : 'Hide all panels'}
+            aria-pressed={allHidden}
+          >
+            <span aria-hidden="true">{allHidden ? '◉' : '○'}</span>{allHidden ? 'Show all' : 'Hide all'}
           </button>
           <button type="button" className="dash4-reset" onClick={resetLayout} title="Reset layout">↺</button>
           <a className="dash4-link" href="/grid-sensor" title="Open Franklin sensors">
