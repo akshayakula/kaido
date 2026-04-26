@@ -34,10 +34,14 @@ const requestProfiles: Record<RequestType, { queue: number; utilization: number;
 
 export function createSession(): DemoSession {
   const id = crypto.randomUUID().slice(0, 8);
+  return createSessionWithId(id);
+}
+
+export function createSessionWithId(id: string): DemoSession {
   const site = SITES[Math.floor(Math.random() * SITES.length)];
   const session: DemoSession = {
     id,
-    label: `Grid demo ${id.toUpperCase()}`,
+    label: id === 'default' ? 'Default grid demo' : `Grid demo ${id.toUpperCase()}`,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     tick: 0,

@@ -5,6 +5,8 @@ import { GridMap } from '@/components/GridMap';
 import type { DemoSession, Scenario } from '@/lib/types';
 import { summarizeKw } from '@/lib/simulation';
 
+const DEFAULT_SESSION_ID = 'default';
+
 const scenarios: { value: Scenario; label: string }[] = [
   { value: 'nominal', label: 'Nominal' },
   { value: 'heatwave', label: 'Heatwave cooling surge' },
@@ -15,12 +17,10 @@ const scenarios: { value: Scenario; label: string }[] = [
 
 export default function DashboardPage() {
   const [session, setSession] = useState<DemoSession | null>(null);
-  const [busy, setBusy] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
 
   useEffect(() => {
-    const saved = window.localStorage.getItem('opendss-session-id');
-    if (saved) refresh(saved);
+    refresh(DEFAULT_SESSION_ID);
   }, []);
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export default function DashboardPage() {
 
   const joinUrl = useMemo(() => {
     if (!session) return '';
-    return `${window.location.origin}/join?session=${session.id}`;
+    return `${window.location.origin}/join`;
   }, [session]);
 
   async function refresh(id: string) {
@@ -45,18 +45,6 @@ export default function DashboardPage() {
     if (!response.ok) return;
     const data = (await response.json()) as { session: DemoSession };
     setSession(data.session);
-  }
-
-  async function createSession() {
-    setBusy(true);
-    try {
-      const response = await fetch('/api/sessions', { method: 'POST' });
-      const data = (await response.json()) as { session: DemoSession };
-      window.localStorage.setItem('opendss-session-id', data.session.id);
-      setSession(data.session);
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function changeScenario(scenario: Scenario) {
@@ -111,7 +99,6 @@ export default function DashboardPage() {
         </div>
         <div className="hero-actions">
           <a className="secondary-link" href="/join">Join page</a>
-          <button onClick={createSession} disabled={busy}>{session ? 'New session' : 'Create session'}</button>
         </div>
       </header>
 
@@ -135,7 +122,7 @@ export default function DashboardPage() {
           <section className="status-card" data-health={session?.grid.health ?? 'normal'}>
             <span>Grid status</span>
             <b>{session?.grid.health.toUpperCase() ?? 'WAITING'}</b>
-            <small>{session ? `Session ${session.id}` : 'Create a session to begin'}</small>
+            <small>{session ? 'Default shared session' : 'Loading default session'}</small>
           </section>
           <section className="metrics">
             <Metric label="Voltage min" value={session ? `${session.grid.voltageMin.toFixed(3)} pu` : '-'} />
@@ -145,8 +132,8 @@ export default function DashboardPage() {
           </section>
           <section className="join-card">
             <p className="eyebrow">Participant entry</p>
-            <h2>Users go to the website and choose a session</h2>
-            <input readOnly value={joinUrl || 'Create a session first'} />
+            <h2>Users go to the website and join the shared grid</h2>
+            <input readOnly value={joinUrl || 'Loading join link'} />
           </section>
         </aside>
       </section>

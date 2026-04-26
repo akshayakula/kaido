@@ -6,7 +6,7 @@ type GridMapProps = {
 
 export function GridMap({ session }: GridMapProps) {
   if (!session) {
-    return <div className="grid-empty">Create a session to seed a synthetic grid location.</div>;
+    return <div className="grid-empty">Loading the shared default grid location.</div>;
   }
 
   const nodes = session.datacenters.map((dc, index) => {

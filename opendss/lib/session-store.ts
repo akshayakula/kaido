@@ -1,9 +1,10 @@
 import { Redis } from '@upstash/redis';
-import { normalizeSession } from './simulation';
+import { createSessionWithId, normalizeSession } from './simulation';
 import type { DemoSession, SessionSummary } from './types';
 
 const SESSION_TTL_SECONDS = 60 * 60 * 4;
 const ACTIVE_KEY = 'sessions:active';
+export const DEFAULT_SESSION_ID = 'default';
 const memory = new Map<string, { session: DemoSession; expiresAt: number }>();
 
 const redis =
@@ -31,6 +32,14 @@ export async function getSession(id: string) {
   }
   cleanupMemory();
   return memory.get(id)?.session ? normalizeSession(structuredClone(memory.get(id)!.session)) : null;
+}
+
+export async function getOrCreateDefaultSession() {
+  const existing = await getSession(DEFAULT_SESSION_ID);
+  if (existing) return existing;
+  const session = createSessionWithId(DEFAULT_SESSION_ID);
+  await saveSession(session);
+  return session;
 }
 
 export async function listSessions(): Promise<SessionSummary[]> {
