@@ -3434,3 +3434,9 @@ h2 {
 .dashboard-screen.v2 .hero-fade { display: none !important; }
 .dashboard-screen.v2 .fp-card { animation: none !important; transform: none !important; max-height: none !important; }
 .dashboard-screen.v2 .fp-card.fp-collapsed > *:not(.fp-bar) { display: revert !important; }
+
+/* Drop the on-map info boxes from /dashboard v2 */
+.dashboard-screen.v2 .site-card,
+.dashboard-screen.v2 .map-panel > .panel-head {
+  display: none !important;
+}
