@@ -3163,3 +3163,274 @@ h2 {
     margin-left: 0;
   }
 }
+
+/* =====================================================================
+   DASHBOARD v2 — clean two-pane layout
+   Topbar: 56 px, brand + status pill + nav.
+   Body: map (left) + right rail (cards).
+   No more giant fading hero, no more floating drag bars,
+   no more translucent HUD over the map.
+   ===================================================================== */
+.dashboard-screen.v2 {
+  display: grid;
+  grid-template-rows: 56px 1fr;
+  grid-template-columns: 1fr clamp(360px, 28vw, 460px);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: #0c0c0a;
+  padding: 0;
+}
+.dashboard-screen.v2 > .operator-topbar {
+  position: relative;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+  margin: 0;
+  border-bottom: 1px solid rgba(228, 226, 201, 0.14);
+  background: rgba(8, 9, 6, 0.72);
+  backdrop-filter: blur(14px);
+  z-index: 12;
+  pointer-events: auto;
+}
+.dashboard-screen.v2 .brand-link {
+  position: relative;
+  left: auto;
+  top: auto;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+.dashboard-screen.v2 .topbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 26px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+.dashboard-screen.v2 .topbar-status .topbar-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(216, 222, 192, 0.5);
+  animation: topbar-pulse 2s ease-in-out infinite;
+}
+.dashboard-screen.v2 .topbar-status[data-health="stressed"] .topbar-dot { background: var(--yellow); box-shadow: 0 0 8px rgba(242, 211, 107, 0.6); }
+.dashboard-screen.v2 .topbar-status[data-health="emergency"] .topbar-dot { background: var(--red); box-shadow: 0 0 10px rgba(226, 123, 99, 0.7); }
+@keyframes topbar-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+.dashboard-screen.v2 .hero-actions {
+  position: relative;
+  top: auto; right: auto; bottom: auto;
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.dashboard-screen.v2 .hero-actions .hdr-btn {
+  height: 30px; min-height: 30px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  padding: 0 12px;
+}
+
+/* Body grid cells */
+.dashboard-screen.v2 .dashboard-stage {
+  position: relative;
+  grid-column: 1; grid-row: 2;
+  display: block;
+  inset: auto;
+  overflow: hidden;
+}
+.dashboard-screen.v2 .map-panel.globe-panel {
+  position: relative;
+  inset: 0;
+  height: 100%;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.dashboard-screen.v2 .map-wrap,
+.dashboard-screen.v2 .franklin-globe-grid,
+.dashboard-screen.v2 .grid-empty {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Compact, glass scenario picker pinned top-left of the map */
+.dashboard-screen.v2 .map-panel > .panel-head {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 6;
+  padding: 8px 10px;
+  width: clamp(220px, 24vw, 280px);
+  border: 1px solid rgba(228, 226, 201, 0.16);
+  background: rgba(8, 9, 6, 0.72);
+  backdrop-filter: blur(10px);
+}
+.dashboard-screen.v2 .map-panel > .panel-head .eyebrow {
+  font-size: 9px; letter-spacing: 0.2em; margin: 0;
+}
+.dashboard-screen.v2 .map-panel > .panel-head h2 {
+  font-size: 13px; margin: 4px 0 4px; line-height: 1.2;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.dashboard-screen.v2 .map-panel > .panel-head .scenario-brief {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.35;
+  margin-bottom: 6px;
+}
+.dashboard-screen.v2 .map-panel > .panel-head select {
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+/* Right rail — single scrollable column with stacked cards */
+.dashboard-screen.v2 .diagnostics-stack,
+.dashboard-screen.v2 .dashboard-hud {
+  position: relative;
+  inset: auto;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  backdrop-filter: none;
+  animation: none;
+  overflow: visible;
+}
+.dashboard-screen.v2 .diagnostics-stack {
+  grid-column: 2; grid-row: 2;
+  padding: 14px 14px 12px;
+  border-left: 1px solid rgba(228, 226, 201, 0.14);
+  background: rgba(8, 9, 6, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  z-index: 8;
+}
+.dashboard-screen.v2 .dashboard-hud {
+  grid-column: 2; grid-row: 2;
+  /* Empty cell in the grid — actual content moves into diagnostics-stack
+     via the move-effect below, but as a fallback, inline-render here. */
+  padding: 0 14px 14px;
+  display: contents;
+}
+.dashboard-screen.v2 .dashboard-hud > * {
+  position: relative;
+  inset: auto;
+  width: auto;
+}
+
+/* Card surfaces in the rail */
+.dashboard-screen.v2 .diagnostics-stack > section,
+.dashboard-screen.v2 .diagnostics-stack > .lower-grid > section,
+.dashboard-screen.v2 .terminal-panel,
+.dashboard-screen.v2 .gpu-scheduler-panel,
+.dashboard-screen.v2 .negotiation-panel {
+  background: rgba(20, 20, 14, 0.86);
+  border: 1px solid rgba(228, 226, 201, 0.10);
+  padding: 12px;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  margin: 0;
+}
+.dashboard-screen.v2 .status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dashboard-screen.v2 .status-card span {
+  font-size: 9px; letter-spacing: 0.2em; color: var(--muted);
+}
+.dashboard-screen.v2 .status-card b { font-size: 22px; line-height: 1.1; }
+.dashboard-screen.v2 .status-card small { color: var(--muted); font-size: 11px; }
+
+.dashboard-screen.v2 .metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.dashboard-screen.v2 .metric {
+  background: rgba(20, 20, 14, 0.86);
+  border: 1px solid rgba(228, 226, 201, 0.10);
+  padding: 8px 10px;
+  min-height: 0;
+}
+.dashboard-screen.v2 .metric span { font-size: 9px; letter-spacing: 0.18em; }
+.dashboard-screen.v2 .metric b { font-size: 14px; }
+
+.dashboard-screen.v2 .analog-panel { padding: 10px; }
+
+/* Hide the redundant join-card in the rail (Join CTA is in the topbar) */
+.dashboard-screen.v2 .diagnostics-stack .join-card { display: none; }
+
+/* Lower-grid (GPU + agent conversation) becomes a vertical pair in the rail */
+.dashboard-screen.v2 .lower-grid.diagnostics-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.dashboard-screen.v2 .lower-grid h2 { font-size: 13px; }
+.dashboard-screen.v2 .lower-grid .panel-head { padding: 0; margin-bottom: 8px; border: 0; background: transparent; }
+
+.dashboard-screen.v2 .terminal-panel { max-height: 28vh; overflow: hidden; }
+
+/* On phones (≤ 600 px) — stack rail under the map */
+@media (max-width: 760px) {
+  .dashboard-screen.v2 {
+    grid-template-rows: 56px auto auto;
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+  }
+  .dashboard-screen.v2 .dashboard-stage { grid-column: 1; grid-row: 2; height: 56vh; min-height: 56vh; }
+  .dashboard-screen.v2 .diagnostics-stack { grid-column: 1; grid-row: 3; border-left: 0; border-top: 1px solid rgba(228,226,201,0.14); }
+  .dashboard-screen.v2 .hero-actions { gap: 4px; }
+  .dashboard-screen.v2 .hero-actions .hdr-btn { font-size: 9px; padding: 0 8px; }
+}
+@media (max-width: 600px) {
+  .dashboard-screen.v2 .topbar-status { display: none; }
+  .dashboard-screen.v2 .map-panel,
+  .dashboard-screen.v2 .map-wrap,
+  .dashboard-screen.v2 .franklin-globe-grid {
+    display: none !important;
+  }
+  .dashboard-screen.v2 { grid-template-rows: 56px 1fr; }
+  .dashboard-screen.v2 .dashboard-stage { display: none; }
+  .dashboard-screen.v2 .diagnostics-stack { grid-row: 2; }
+}
+
+/* Disable previously-injected chrome on v2 */
+.dashboard-screen.v2 .fp-bar,
+.dashboard-screen.v2 .hero-fade { display: none !important; }
+.dashboard-screen.v2 .fp-card { animation: none !important; transform: none !important; max-height: none !important; }
+.dashboard-screen.v2 .fp-card.fp-collapsed > *:not(.fp-bar) { display: revert !important; }

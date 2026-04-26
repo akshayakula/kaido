@@ -201,14 +201,14 @@ export default function DashboardPage() {
   const dssPreview = session ? buildDssPreview(session) : null;
 
   return (
-    <main className="dashboard-screen">
+    <main className="dashboard-screen v2">
       <header className="hero operator-topbar">
         <a className="brand-link" href="/" aria-label="Franklin home">Franklin</a>
-        <div className="hero-fade">
-          <p className="eyebrow">OpenDSS Agent Demo · Franklin Grid Sense</p>
-          <h1>FRANKLIN GRID</h1>
-          <p className="hero-copy">A live operator console where data-center agents negotiate inference load against an OpenDSS-backed distribution grid.</p>
-        </div>
+        <span className="topbar-status" data-health={session?.grid.health ?? 'normal'}>
+          {session?.grid.health
+            ? <><i className="topbar-dot" />{session.grid.health.toUpperCase()} · {session.site.region}</>
+            : 'connecting…'}
+        </span>
         <div className="hero-actions">
           <a className="hdr-btn" href="/readouts">Readouts</a>
           <a className="hdr-btn" href="/grid-sensor">Franklin sensors</a>
@@ -232,8 +232,9 @@ export default function DashboardPage() {
           </div>
           <div className="map-wrap"><GridMap session={session} /></div>
         </div>
+      </section>
 
-        <aside className="side-stack diagnostics-stack">
+      <aside className="side-stack diagnostics-stack">
           <section className="status-card" data-health={session?.grid.health ?? 'normal'}>
             <span>Grid status</span>
             <b>{session?.grid.health.toUpperCase() ?? 'WAITING'}</b>
@@ -256,10 +257,7 @@ export default function DashboardPage() {
             </div>
             <a className="primary-link" href="/join">Open join page</a>
           </section>
-        </aside>
-      </section>
 
-      <aside className="dashboard-hud">
       <section className="lower-grid diagnostics-bottom">
         <section className="panel gpu-scheduler-panel">
           <div className="panel-head compact">
