@@ -106,11 +106,34 @@ a {
   pointer-events: none;
   position: absolute;
   inset: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  mix-blend-mode: difference;
+  z-index: 2;
+}
+
+.home-mapbox-globe,
+.home-mapbox-empty {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.home-mapbox-globe {
+  pointer-events: auto;
+  background:
+    linear-gradient(90deg, rgba(228, 226, 201, 0.028) 1px, transparent 1px),
+    linear-gradient(rgba(228, 226, 201, 0.028) 1px, transparent 1px),
+    radial-gradient(circle at 50% 48%, rgba(228, 226, 201, 0.12), transparent 35%),
+    #17170f;
+  background-size: 42px 42px, 42px 42px, auto;
+}
+
+.home-mapbox-empty {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .home-globe {
