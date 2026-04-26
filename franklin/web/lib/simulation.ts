@@ -539,7 +539,7 @@ export function appendAgentEvent(session: DemoSession, from: string, to: string,
   addEvent(session, from, to, type, body);
 }
 
-function addEvent(session: DemoSession, from: string, to: string, type: string, body: string) {
+export function addEvent(session: DemoSession, from: string, to: string, type: string, body: string) {
   const event: AgentEvent = {
     id: crypto.randomUUID().slice(0, 10),
     at: Date.now(),

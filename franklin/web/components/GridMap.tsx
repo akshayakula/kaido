@@ -1,17 +1,28 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import type { FeatureCollection, GeoJsonProperties, Geometry } from 'geojson';
 import type { DemoSession } from '@/lib/types';
+import type { DeviceListItem } from '@/lib/sensor-store';
 
 type GridMapProps = {
   session: DemoSession | null;
 };
 
 type DrawClass = 'low' | 'medium' | 'high';
+type SensorHealthClass = 'good' | 'warn' | 'bad' | 'unknown';
 type GridView = {
   center: { lat: number; lng: number };
+  sensor: {
+    health: number | null;
+    healthClass: SensorHealthClass;
+    color: string;
+    label: string;
+    state: string;
+    tempF: number | null;
+    live: boolean;
+  } | null;
   nodes: {
     dc: DemoSession['datacenters'][number];
     draw: number;
@@ -39,6 +50,29 @@ const COLORS: Record<DrawClass, string> = {
   medium: '#f2d36b',
   high: '#e27b63',
 };
+const SENSOR_COLORS: Record<SensorHealthClass, string> = {
+  good: '#5fd38a',
+  warn: '#f2d36b',
+  bad: '#e27b63',
+  unknown: '#7f8478',
+};
+const SENSOR_DEVICE_ID = 'sensor1';
+const SENSOR_LIVE_WINDOW_S = 1800;
+const SENSOR_REFRESH_MS = 2000;
+
+function sensorHealthScore(
+  tempC: number | undefined,
+  hum: number | undefined,
+  deltaC: number | undefined,
+): number | null {
+  if (tempC === undefined && hum === undefined && deltaC === undefined) return null;
+  const tempF = tempC === undefined ? null : tempC * 9 / 5 + 32;
+  const deltaF = deltaC === undefined ? null : deltaC * 9 / 5;
+  const driftScore = deltaF === null ? 1 : Math.max(0, 1 - Math.pow(Math.abs(deltaF) / 6, 2));
+  const bandScore  = tempF === null ? 1 : tempF >= 70 && tempF <= 80 ? 1 : Math.max(0, 1 - Math.abs(tempF - 75) / 12);
+  const humScore   = hum === undefined ? 1 : hum >= 30 && hum <= 65 ? 1 : Math.max(0, 1 - Math.abs(hum - 47.5) / 25);
+  return Math.max(0, Math.min(1, driftScore * 0.7 + bandScore * 0.2 + humScore * 0.1));
+}
 
 const POPULATED_LIGHTS: [number, number][] = [
   [-74.0, 40.7], [-73.9, 40.8], [-77.0, 38.9], [-87.6, 41.9], [-95.4, 29.7],
@@ -53,10 +87,48 @@ const POPULATED_LIGHTS: [number, number][] = [
 export function GridMap({ session }: GridMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const [sensor, setSensor] = useState<DeviceListItem | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      try {
+        const list: DeviceListItem[] = await fetch('/api/devices').then((r) => r.json());
+        if (!alive) return;
+        setSensor(list.find((x) => x.device === SENSOR_DEVICE_ID) ?? null);
+      } catch {
+        /* ignore */
+      }
+    };
+    refresh();
+    const pollId = window.setInterval(refresh, SENSOR_REFRESH_MS);
+    const tickId = window.setInterval(() => setNowMs(Date.now()), 500);
+    return () => { alive = false; window.clearInterval(pollId); window.clearInterval(tickId); };
+  }, []);
 
   const view = useMemo(() => {
     if (!session) return null;
     const center = { lat: session.site.lat, lng: session.site.lng };
+    const sensorView: GridView['sensor'] = (() => {
+      if (!sensor) return null;
+      const tele = (sensor.latest_telemetry ?? {}) as Record<string, number | undefined>;
+      const teleTs = tele.ts;
+      const live = teleTs !== undefined && nowMs / 1000 - teleTs < SENSOR_LIVE_WINDOW_S;
+      const score = sensorHealthScore(tele.temp_c, tele.humidity, tele.delta_c);
+      const healthClass: SensorHealthClass =
+        !live || score === null ? 'unknown' : score > 0.85 ? 'good' : score > 0.55 ? 'warn' : 'bad';
+      const tempF = tele.temp_c === undefined ? null : tele.temp_c * 9 / 5 + 32;
+      return {
+        health: score,
+        healthClass,
+        color: SENSOR_COLORS[healthClass],
+        label: 'Franklin sensor 1',
+        state: sensor.state,
+        tempF,
+        live,
+      };
+    })();
     const recentTalkingActors = new Set(
       session.events
         .slice(0, 20)
@@ -101,8 +173,8 @@ export function GridMap({ session }: GridMapProps) {
         lng,
       };
     });
-    return { center, nodes };
-  }, [session]);
+    return { center, sensor: sensorView, nodes };
+  }, [session, sensor, nowMs]);
 
   useEffect(() => {
     if (!containerRef.current || !session || !view || mapRef.current || !MAPBOX_TOKEN) return;
@@ -121,6 +193,8 @@ export function GridMap({ session }: GridMapProps) {
           cylinders: emptyGeoJsonSource(),
           labels: emptyGeoJsonSource(),
           site: emptyGeoJsonSource(),
+          sensor: emptyGeoJsonSource(),
+          'sensor-cylinder': emptyGeoJsonSource(),
         },
         layers: [
           // Base land tone — slightly warmer than the page bg.
@@ -231,6 +305,77 @@ export function GridMap({ session }: GridMapProps) {
             type: 'line',
             source: 'cylinders',
             paint: { 'line-color': ['get', 'color'], 'line-width': 1, 'line-opacity': 0.8 },
+          },
+          {
+            id: 'sensor-cylinder-extrusion',
+            type: 'fill-extrusion',
+            source: 'sensor-cylinder',
+            paint: {
+              'fill-extrusion-color': ['get', 'color'],
+              'fill-extrusion-height': ['get', 'height'],
+              'fill-extrusion-base': 0,
+              'fill-extrusion-opacity': 0.92,
+              'fill-extrusion-vertical-gradient': true,
+              'fill-extrusion-height-transition': { duration: 800, delay: 0 },
+            },
+          },
+          {
+            id: 'sensor-cylinder-rings',
+            type: 'line',
+            source: 'sensor-cylinder',
+            paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': 0.95 },
+          },
+          {
+            id: 'sensor-pulse',
+            type: 'circle',
+            source: 'sensor',
+            paint: {
+              'circle-radius': 22,
+              'circle-color': ['get', 'color'],
+              'circle-opacity': 0.18,
+              'circle-blur': 0.7,
+            },
+          },
+          {
+            id: 'sensor-halo',
+            type: 'circle',
+            source: 'sensor',
+            paint: {
+              'circle-radius': 12,
+              'circle-color': ['get', 'color'],
+              'circle-opacity': 0.35,
+              'circle-blur': 0.3,
+            },
+          },
+          {
+            id: 'sensor-core',
+            type: 'circle',
+            source: 'sensor',
+            paint: {
+              'circle-radius': 6,
+              'circle-color': ['get', 'color'],
+              'circle-stroke-color': '#1c1c14',
+              'circle-stroke-width': 1.5,
+              'circle-opacity': 1,
+            },
+          },
+          {
+            id: 'sensor-label',
+            type: 'symbol',
+            source: 'sensor',
+            layout: {
+              'text-field': ['get', 'label'],
+              'text-size': 11,
+              'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+              'text-offset': [0, 1.6],
+              'text-anchor': 'top',
+              'text-allow-overlap': true,
+            },
+            paint: {
+              'text-color': ['get', 'color'],
+              'text-halo-color': '#202017',
+              'text-halo-width': 1.4,
+            },
           },
           {
             id: 'dc-labels',
@@ -394,6 +539,37 @@ function updateMapSources(map: mapboxgl.Map, view: GridView) {
       geometry: { type: 'Point', coordinates: [view.center.lng, view.center.lat] },
       properties: {},
     }],
+  });
+  setSource(map, 'sensor', {
+    type: 'FeatureCollection',
+    features: view.sensor ? [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [view.center.lng, view.center.lat] },
+      properties: {
+        color: view.sensor.color,
+        label: view.sensor.live
+          ? `${view.sensor.label} · ${view.sensor.state}`
+          : `${view.sensor.label} · offline`,
+      },
+    }] : [],
+  });
+  // Sensor cylinder — explicitly taller than any data-center cylinder so it
+  // reads as the primary node on the map.
+  const maxDcHeight = view.nodes.reduce((m, n) => Math.max(m, 600 + n.loadSignal * 9000), 600);
+  const sensorHeight = Math.max(15000, maxDcHeight * 1.6);
+  setSource(map, 'sensor-cylinder', {
+    type: 'FeatureCollection',
+    features: view.sensor ? [{
+      type: 'Feature',
+      geometry: {
+        type: 'Polygon',
+        coordinates: [circlePolygon(view.center.lng, view.center.lat, 0.0028)],
+      },
+      properties: {
+        color: view.sensor.color,
+        height: sensorHeight,
+      },
+    }] : [],
   });
   setSource(map, 'flows', {
     type: 'FeatureCollection',
