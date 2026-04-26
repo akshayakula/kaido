@@ -1,4 +1,4 @@
-import { appendAgentEvent } from './simulation';
+import { appendAgentEvent, applyLlmAllocation } from './simulation';
 import { scenarioBrief, scenarioLabel } from './scenarios';
 import type { DataCenterAgent, DemoSession, RequestType } from './types';
 
@@ -48,7 +48,191 @@ export async function addChatTurn(session: DemoSession, trigger: Extract<Trigger
   } else {
     appendAgentEvent(session, 'operator', 'grid-agent', 'CHAT', trigger.message);
   }
+  // 1) Free-text negotiation message (existing behavior).
   await addOpenAINegotiationEvent(session, trigger);
+  // 2) Tool-call allocator: grid agent reads recent chat + state, returns
+  //    fractions of total grid power per DC.
+  await runGridAllocatorToolCall(session, trigger);
+}
+
+type AllocationToolArgs = {
+  rationale: string;
+  allocations: Array<{ dcId: string; fraction: number; reason?: string }>;
+};
+
+/**
+ * Calls the LLM with a forced tool definition that allocates a fraction of the
+ * grid total to each data center. Applies the result via applyLlmAllocation
+ * and emits a system event explaining what happened.
+ */
+export async function runGridAllocatorToolCall(
+  session: DemoSession,
+  trigger: Trigger,
+): Promise<void> {
+  if (!session.datacenters.length) return;
+  const apiKey = process.env.OPENAI_API_KEY || process.env.NVIDIA_NIM_API_KEY;
+  if (!apiKey) return;
+
+  const usingNvidia = !process.env.OPENAI_API_KEY && !!process.env.NVIDIA_NIM_API_KEY;
+  const model =
+    process.env.OPENAI_MODEL ||
+    process.env.NVIDIA_NIM_MODEL ||
+    (usingNvidia ? 'mistralai/mistral-nemotron' : 'gpt-4o-mini');
+  const baseUrl =
+    process.env.OPENAI_BASE_URL ||
+    process.env.NVIDIA_NIM_BASE_URL ||
+    (usingNvidia ? 'https://integrate.api.nvidia.com/v1' : 'https://api.openai.com/v1');
+
+  const totalCapacityKw = session.grid.totalCapacityKw ?? 0;
+  const recentChat = session.events
+    .slice(0, 24)
+    .filter((e) => e.type === 'CHAT' || e.type === 'AI_NEGOTIATION' || e.type === 'REQUEST_RELIEF' || e.type === 'RELIEF_OFFER')
+    .map((e) => ({ at: e.at, from: e.from, to: e.to, type: e.type, body: e.body }));
+
+  const dcs = session.datacenters.map((dc) => ({
+    dcId: dc.id,
+    name: dc.name,
+    priority: Number(dc.priority.toFixed(2)),
+    queueDepth: dc.queueDepth,
+    desiredUtilizationPct: Math.round(dc.desiredUtilization * 100),
+    actualUtilizationPct: Math.round(dc.actualUtilization * 100),
+    schedulerCapPct: Math.round(dc.schedulerCap * 100),
+    batterySocPct: Math.round(dc.batterySoc * 100),
+    currentFraction: Number((dc.gridAllocation?.fraction ?? 0).toFixed(4)),
+    requestedKw: Math.round(dc.gridAllocation?.requestedKw ?? 0),
+  }));
+
+  const tools = [
+    {
+      type: 'function',
+      function: {
+        name: 'set_dc_allocations',
+        description:
+          "Set each data center's share of total grid power as a fraction. " +
+          'Sum of fractions must be ≤ 0.92 (the agent budget). Higher-priority DCs ' +
+          'and DCs explicitly requesting more in chat should get larger fractions ' +
+          'unless the grid is constrained, in which case shed flexible load first.',
+        parameters: {
+          type: 'object',
+          required: ['rationale', 'allocations'],
+          properties: {
+            rationale: {
+              type: 'string',
+              description: 'One short sentence explaining the overall allocation decision.',
+            },
+            allocations: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['dcId', 'fraction'],
+                properties: {
+                  dcId: { type: 'string', description: 'Data center id from the input list.' },
+                  fraction: {
+                    type: 'number',
+                    description: 'Fraction of total grid power (0.0-0.5) for this DC.',
+                  },
+                  reason: { type: 'string', description: 'Per-DC justification.' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  ];
+
+  const triggerSummary =
+    trigger.kind === 'datacenter_chat'
+      ? `${trigger.datacenter.name} sent chat: "${trigger.message}"`
+      : trigger.kind === 'operator_chat'
+        ? `Operator sent chat: "${trigger.message}"`
+        : trigger.kind;
+
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are the grid agent. You allocate fractions of total grid power to each data center based on grid state, scenario, and recent A2A chat. ' +
+              'You must call the set_dc_allocations tool exactly once. Sum of fractions ≤ 0.92.',
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              trigger: triggerSummary,
+              scenario: {
+                key: session.scenario,
+                label: scenarioLabel(session.scenario),
+                brief: scenarioBrief(session.scenario),
+              },
+              grid: {
+                health: session.grid.health,
+                voltageMin: session.grid.voltageMin,
+                lineLoadingMax: session.grid.lineLoadingMax,
+                reserveKw: Math.round(session.grid.reserveKw),
+                totalCapacityKw: Math.round(totalCapacityKw),
+                agentBudgetKw: Math.round(session.grid.agentBudgetKw ?? 0),
+              },
+              datacenters: dcs,
+              recentChat,
+            }),
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 600,
+        tools,
+        tool_choice: { type: 'function', function: { name: 'set_dc_allocations' } },
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`AI provider ${response.status}: ${body.slice(0, 400)}`);
+    }
+
+    const json = (await response.json()) as {
+      choices?: Array<{
+        message?: {
+          tool_calls?: Array<{ function?: { arguments?: string } }>;
+        };
+      }>;
+    };
+    const argsRaw = json.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+    if (!argsRaw) throw new Error('No tool call returned');
+    const args = JSON.parse(argsRaw) as AllocationToolArgs;
+    if (!args || !Array.isArray(args.allocations)) throw new Error('Malformed tool args');
+
+    applyLlmAllocation(session, args.allocations, args.rationale ?? 'LLM allocator decision.');
+
+    const summary = args.allocations
+      .filter((a) => session.datacenters.some((d) => d.id === a.dcId))
+      .map((a) => {
+        const dc = session.datacenters.find((d) => d.id === a.dcId)!;
+        return `${dc.name}: ${(a.fraction * 100).toFixed(1)}%`;
+      })
+      .join(' · ');
+    appendAgentEvent(
+      session,
+      'grid-agent',
+      'data-center-agents',
+      'AI_ALLOCATION',
+      `${args.rationale ?? 'Allocator decision'} → ${summary}`,
+    );
+  } catch (err) {
+    appendAgentEvent(
+      session,
+      'ai-agent',
+      'demo',
+      'AI_FALLBACK',
+      `Tool-call allocator unavailable; deterministic allocation kept. ${err instanceof Error ? err.message.slice(0, 160) : ''}`,
+    );
+  }
 }
 
 function aiFrom(trigger: Trigger) {

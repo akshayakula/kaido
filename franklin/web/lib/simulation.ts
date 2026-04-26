@@ -279,12 +279,14 @@ export function appendPowerFlowResult(session: DemoSession) {
 
 export function solveGridStep(session: DemoSession): GridState {
   const pressure = scenarioPressure[session.scenario];
+  const totalCapacityKw = pressure.capacityKw;
+  const agentBudgetKw = totalCapacityKw * 0.92;
   const totalKw = session.datacenters.reduce((sum, dc) => sum + kwForDataCenter(dc, pressure.cooling), 0);
   const batterySupportKw = session.datacenters.reduce((sum, dc) => sum + dc.batterySupportKw, 0);
-  const loadRatio = totalKw / pressure.capacityKw;
+  const loadRatio = totalKw / totalCapacityKw;
   const lineLoadingMax = clamp(loadRatio + session.datacenters.length * 0.012, 0.18, 1.32);
   const voltageMin = clamp(1.014 - lineLoadingMax * 0.06 - pressure.voltageSag + batterySupportKw / 52000, 0.9, 1.025);
-  const reserveKw = Math.max(0, pressure.capacityKw * 0.94 - totalKw);
+  const reserveKw = Math.max(0, totalCapacityKw * 0.94 - totalKw);
   const lossesKw = totalKw * (0.025 + lineLoadingMax * 0.022);
   const violations = [];
   if (voltageMin < 0.955) violations.push('low_voltage');
@@ -298,6 +300,8 @@ export function solveGridStep(session: DemoSession): GridState {
     lossesKw,
     frequencyHz: 60 - Math.max(0, lineLoadingMax - 0.8) * 0.1,
     violations,
+    totalCapacityKw,
+    agentBudgetKw,
   };
 }
 
@@ -463,11 +467,13 @@ export function applyGridAgentAllocation(session: DemoSession) {
     }, 0);
   }
 
+  const totalCapacityKw = pressure.capacityKw;
   requests.forEach((item) => {
     const extra = totalRequested <= budgetKw ? item.flexibleKw : allocatedExtras.get(item.dc.id) ?? 0;
     const allocatedKw = Math.min(item.requestedKw, item.minimumKw + extra);
     const allocatedUtilization = utilizationForKw(item.dc, pressure.cooling, allocatedKw);
     const deferredKw = Math.max(0, item.requestedKw - allocatedKw);
+    const fraction = totalCapacityKw > 0 ? allocatedKw / totalCapacityKw : 0;
     item.dc.gridAllocation = {
       requestedKw: item.requestedKw,
       allocatedKw,
@@ -480,12 +486,75 @@ export function applyGridAgentAllocation(session: DemoSession) {
         totalRequested <= budgetKw
           ? 'Grid agent cleared requested GPU load within reserve posture.'
           : `Grid agent allocated ${Math.round(allocatedKw)} kW of ${Math.round(item.requestedKw)} kW requested to hold ${Math.round(reserveHoldKw)} kW reserve.`,
+      fraction,
+      source: 'deterministic',
     };
     item.dc.lastInstruction =
       deferredKw > 20
-        ? `Grid allocation active: ${Math.round(allocatedKw)} kW cleared, ${Math.round(deferredKw)} kW deferred.`
-        : 'Grid allocation cleared requested load.';
+        ? `Grid allocation active: ${(fraction * 100).toFixed(1)}% of grid (${Math.round(allocatedKw)} kW cleared, ${Math.round(deferredKw)} kW deferred).`
+        : `Grid allocation cleared: ${(fraction * 100).toFixed(1)}% of grid (${Math.round(allocatedKw)} kW).`;
   });
+}
+
+/**
+ * Apply an LLM-supplied fraction-of-grid allocation. Each entry is clamped to
+ * [minFraction, 0.5], renormalized so the total budget never exceeds
+ * agentBudget/totalCapacity, and stamped onto each DC's gridAllocation. DCs
+ * not present in the input keep whatever the deterministic pass produced.
+ */
+export function applyLlmAllocation(
+  session: DemoSession,
+  fractions: Array<{ dcId: string; fraction: number; reason?: string }>,
+  rationale: string,
+) {
+  const pressure = scenarioPressure[session.scenario];
+  const totalCapacityKw = pressure.capacityKw;
+  const budgetFraction = 0.92;
+  const minFractionFor = (dc: DataCenterAgent) =>
+    (dc.priority > 0.75 ? 0.34 : dc.priority > 0.55 ? 0.26 : 0.18) *
+    kwForUtilization(dc, pressure.cooling, 1) /
+    Math.max(1, totalCapacityKw);
+
+  // Build a working table, clamping per-DC fractions.
+  const byId = new Map(session.datacenters.map((dc) => [dc.id, dc] as const));
+  const proposed: Array<{ dc: DataCenterAgent; fraction: number; reason?: string }> = [];
+  for (const entry of fractions) {
+    const dc = byId.get(entry.dcId);
+    if (!dc) continue;
+    const lo = minFractionFor(dc);
+    const hi = 0.5;
+    const f = Math.max(lo, Math.min(hi, Number.isFinite(entry.fraction) ? entry.fraction : lo));
+    proposed.push({ dc, fraction: f, reason: entry.reason });
+  }
+
+  // Renormalize if the model overshot the budget.
+  const sum = proposed.reduce((s, p) => s + p.fraction, 0);
+  if (sum > budgetFraction && sum > 0) {
+    const k = budgetFraction / sum;
+    proposed.forEach((p) => { p.fraction *= k; });
+  }
+
+  for (const p of proposed) {
+    const allocatedKw = p.fraction * totalCapacityKw;
+    const allocatedUtilization = utilizationForKw(p.dc, pressure.cooling, allocatedKw);
+    const requestedKw = p.dc.gridAllocation?.requestedKw ?? allocatedKw;
+    const deferredKw = Math.max(0, requestedKw - allocatedKw);
+    p.dc.gridAllocation = {
+      requestedKw,
+      allocatedKw,
+      deferredKw,
+      requestedUtilization: p.dc.gridAllocation?.requestedUtilization ?? allocatedUtilization,
+      allocatedUtilization,
+      batteryDispatchKw: p.dc.batterySupportKw,
+      constraint: deferredKw > 1 ? allocationConstraint(session) : 'none',
+      reason: p.reason ?? rationale,
+      fraction: p.fraction,
+      source: 'llm',
+    };
+    p.dc.lastInstruction =
+      `LLM allocator: ${(p.fraction * 100).toFixed(1)}% of grid (${Math.round(allocatedKw)} kW)`;
+  }
+  touch(session);
 }
 
 function kwForDataCenter(dc: DataCenterAgent, coolingFactor: number) {

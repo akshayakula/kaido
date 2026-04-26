@@ -37,6 +37,10 @@ export type GridState = {
   transformerLoading?: number;
   lineLoadings?: GridLineLoading[];
   datacenterLoads?: GridDataCenterLoad[];
+  /** Firm capacity the grid can serve this scenario (kW). Single source of truth. */
+  totalCapacityKw?: number;
+  /** Headroom budget the agent can hand out (kW). */
+  agentBudgetKw?: number;
 };
 
 export type GridLineLoading = {
@@ -69,6 +73,10 @@ export type GridAllocation = {
   batteryDispatchKw: number;
   constraint: 'none' | 'voltage' | 'line' | 'transformer' | 'reserve';
   reason: string;
+  /** Fraction of grid totalCapacityKw allocated to this DC (0-1). */
+  fraction?: number;
+  /** Source of the allocation: deterministic fallback or LLM tool-call. */
+  source?: 'deterministic' | 'llm';
 };
 
 export type SlurmScheduler = {

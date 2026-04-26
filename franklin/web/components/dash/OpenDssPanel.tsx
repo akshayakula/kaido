@@ -38,7 +38,7 @@ export function OpenDssPanel({ session }: { session: DemoSession | null }) {
   const MIN_PER_NODE = 180; // px of horizontal room each tap needs.
   const baseW = 1180;
   const W = Math.max(baseW, 360 + MIN_PER_NODE * N + 60);
-  const H = 320;
+  const H = 340;
   const srcX = 70;
   const busY = 110;
   const xfX = 220;
@@ -57,16 +57,25 @@ export function OpenDssPanel({ session }: { session: DemoSession | null }) {
     <div className="dss2">
       <div className="dss2__head">
         <div className="dss2__stat">
+          <span>Grid total</span>
+          <b>{Math.round(grid.totalCapacityKw ?? 0).toLocaleString()} kW</b>
+        </div>
+        <div className="dss2__stat">
+          <span>Allocated</span>
+          <b>
+            {Math.round(totalKw).toLocaleString()} kW
+            {grid.totalCapacityKw && grid.totalCapacityKw > 0 && (
+              <small> · {((totalKw / grid.totalCapacityKw) * 100).toFixed(0)}%</small>
+            )}
+          </b>
+        </div>
+        <div className="dss2__stat">
           <span>Bus loading</span>
           <b className={`tone-${lt}`}>{grid.lineLoadingMax.toFixed(2)}×</b>
         </div>
         <div className="dss2__stat">
           <span>Voltage floor</span>
           <b className={`tone-${vt}`}>{grid.voltageMin.toFixed(3)} pu</b>
-        </div>
-        <div className="dss2__stat">
-          <span>Total load</span>
-          <b>{Math.round(totalKw).toLocaleString()} kW</b>
         </div>
       </div>
 
@@ -106,13 +115,18 @@ export function OpenDssPanel({ session }: { session: DemoSession | null }) {
           const allocated = dc.slurm?.allocatedGpus ?? Math.round(dc.actualUtilization * dc.gpuCount);
           const utilPct = Math.round((allocated / Math.max(1, dc.gpuCount)) * 100);
           const t: Tone = utilPct > 80 ? 'critical' : utilPct > 55 ? 'warn' : 'ok';
+          const fraction = dc.gridAllocation?.fraction
+            ?? (grid.totalCapacityKw && grid.totalCapacityKw > 0 ? kw / grid.totalCapacityKw : 0);
+          const fracPct = (fraction * 100).toFixed(1);
+          const isLlm = dc.gridAllocation?.source === 'llm';
           return (
             <g key={dc.id} className={`dss2-load tone-${t}`} style={{ ['--flow-speed' as string]: `${(2.6 - intensity * 1.8).toFixed(2)}s` }}>
               <line x1={x} y1={busY} x2={x} y2={loadTop} className="dss2-flow dss2-flow--vert" />
-              <rect x={x - 48} y={loadTop} width="96" height="58" rx="3" className="dss2-load__box" />
-              <text x={x} y={loadTop + 18} className="dss2-cap" textAnchor="middle">{shortName(dc.name, i)}</text>
-              <text x={x} y={loadTop + 36} className="dss2-val" textAnchor="middle">{kw} kW</text>
-              <text x={x} y={loadTop + 50} className="dss2-sub" textAnchor="middle">{utilPct}% · {allocated}/{dc.gpuCount}</text>
+              <rect x={x - 52} y={loadTop} width="104" height="68" rx="3" className="dss2-load__box" />
+              <text x={x} y={loadTop + 16} className="dss2-cap" textAnchor="middle">{shortName(dc.name, i)}</text>
+              <text x={x} y={loadTop + 34} className="dss2-val" textAnchor="middle">{kw} kW</text>
+              <text x={x} y={loadTop + 48} className="dss2-sub" textAnchor="middle">{fracPct}% of grid {isLlm ? '· llm' : ''}</text>
+              <text x={x} y={loadTop + 60} className="dss2-sub" textAnchor="middle">{utilPct}% gpu · {allocated}/{dc.gpuCount}</text>
             </g>
           );
         }) : (
