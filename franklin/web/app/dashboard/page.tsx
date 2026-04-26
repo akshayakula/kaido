@@ -247,7 +247,6 @@ export default function DashboardPage() {
             <Metric label="Data centers" value={session ? String(session.datacenters.length) : '-'} />
             <Metric label="Session store" value={storeHealth ? storeHealthLabel(storeHealth) : 'checking'} />
           </section>
-          <GridAnalogReadouts session={session} />
           <section className="join-card">
             <p className="eyebrow">Participant entry</p>
             <h2>Users go to the website and join the shared grid</h2>
