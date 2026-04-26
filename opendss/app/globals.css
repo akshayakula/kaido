@@ -1468,12 +1468,170 @@ h2 {
   line-height: 1.45;
 }
 
+.readouts-shell {
+  max-width: 1500px;
+}
+
+.readouts-hero h1 {
+  max-width: 1040px;
+}
+
+.readout-status-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.readout-stat {
+  min-height: 108px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: rgba(228, 226, 201, 0.035);
+}
+
+.readout-stat span,
+.readout-stat small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.readout-stat b {
+  display: block;
+  margin: 9px 0;
+  font-family: "GC Vank", "Impact", "Arial Narrow Bold", sans-serif;
+  font-size: 31px;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.readouts-console {
+  min-height: 68vh;
+}
+
+.readouts-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(260px, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.mode-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mode-tabs button {
+  min-height: 36px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mode-tabs button[data-active="true"] {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+
+.readout-conversation,
+.api-event-list {
+  display: grid;
+  max-height: 66vh;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.readout-message,
+.api-event,
+.json-grid article {
+  border: 1px solid rgba(228, 226, 201, 0.16);
+  background: rgba(228, 226, 201, 0.028);
+}
+
+.readout-message {
+  padding: 12px;
+}
+
+.readout-message[data-type="AI_NEGOTIATION"],
+.readout-message[data-type="AI_FALLBACK"] {
+  border-color: rgba(242, 211, 107, 0.44);
+  background: rgba(242, 211, 107, 0.055);
+}
+
+.readout-message[data-type="POWER_FLOW_RESULT"] {
+  border-color: rgba(216, 222, 192, 0.34);
+}
+
+.readout-message-head {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.readout-message-head b,
+.readout-message-head span,
+.readout-message-head time,
+.readout-message small {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.readout-message-head b {
+  color: var(--text);
+}
+
+.readout-message p {
+  margin: 10px 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.api-event pre,
+.json-grid pre {
+  max-height: 66vh;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  color: rgba(216, 222, 192, 0.92);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.json-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.6fr);
+  gap: 12px;
+}
+
+.json-grid h2 {
+  padding: 12px 12px 0;
+  font-size: 18px;
+}
+
 @media (max-width: 1100px) {
   .dashboard-grid,
   .lower-grid,
   .dss-facts,
   .join-shell,
   .phone-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .readout-status-grid,
+  .readouts-toolbar,
+  .json-grid {
     grid-template-columns: 1fr;
   }
 

@@ -124,6 +124,7 @@ export default function DashboardPage() {
           <p className="hero-copy">A live operator console where data-center agents negotiate inference load against an OpenDSS-backed distribution grid.</p>
         </div>
         <div className="hero-actions">
+          <a className="secondary-link" href="/readouts">Readouts</a>
           <a className="secondary-link" href="/join">Join page</a>
         </div>
       </header>

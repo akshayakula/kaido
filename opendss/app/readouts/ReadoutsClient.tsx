@@ -1,0 +1,187 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import type { AgentEvent, DemoSession } from '@/lib/types';
+
+const DEFAULT_SESSION_ID = 'default';
+
+type StoreHealth = {
+  configured: boolean;
+  mode: 'upstash' | 'memory' | 'memory-fallback';
+  ok: boolean;
+  host: string | null;
+  ping?: string;
+  roundTrip?: boolean;
+  activeSessions?: number;
+  error?: string;
+};
+
+type ReadoutMode = 'conversation' | 'events' | 'json';
+
+export function ReadoutsClient() {
+  const [session, setSession] = useState<DemoSession | null>(null);
+  const [storeHealth, setStoreHealth] = useState<StoreHealth | null>(null);
+  const [mode, setMode] = useState<ReadoutMode>('conversation');
+  const [filter, setFilter] = useState('');
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+
+  useEffect(() => {
+    refresh();
+    const interval = window.setInterval(refresh, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  async function refresh() {
+    const [sessionResponse, healthResponse] = await Promise.all([
+      fetch(`/api/sessions/${DEFAULT_SESSION_ID}/state`),
+      fetch('/api/upstash/health'),
+    ]);
+
+    if (sessionResponse.ok) {
+      const data = (await sessionResponse.json()) as { session: DemoSession };
+      setSession(data.session);
+    }
+
+    if (healthResponse.ok || healthResponse.status === 503) {
+      const data = (await healthResponse.json()) as StoreHealth;
+      setStoreHealth(data);
+    }
+
+    setLastUpdated(Date.now());
+  }
+
+  const events = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    const all = session?.events ?? [];
+    if (!q) return all;
+    return all.filter((event) =>
+      [event.type, event.from, event.to, event.body].some((part) => part.toLowerCase().includes(q))
+    );
+  }, [filter, session]);
+
+  const latestAi = session?.events.find((event) => event.type === 'AI_NEGOTIATION' || event.type === 'AI_FALLBACK');
+
+  return (
+    <main className="shell readouts-shell">
+      <header className="hero readouts-hero">
+        <div>
+          <p className="eyebrow">Agentic API readouts</p>
+          <h1>Full negotiation stream</h1>
+          <p className="hero-copy">Raw default-session events, agent messages, OpenDSS solves, Slurm actions, and backing store status.</p>
+        </div>
+        <div className="hero-actions">
+          <a className="secondary-link" href="/dashboard">Dashboard</a>
+          <a className="secondary-link" href="/join">Join</a>
+        </div>
+      </header>
+
+      <section className="readout-status-grid">
+        <ReadoutStat label="Session" value={session?.id ?? 'loading'} detail={session ? `${session.datacenters.length} data centers` : 'polling'} />
+        <ReadoutStat label="Grid" value={session?.grid.health ?? 'waiting'} detail={session?.grid.solver ?? 'readout pending'} />
+        <ReadoutStat label="Events" value={String(session?.events.length ?? 0)} detail={latestAi ? latestAi.type : 'no AI turn yet'} />
+        <ReadoutStat label="Store" value={storeHealthLabel(storeHealth)} detail={storeHealth?.host ?? 'server-side only'} />
+        <ReadoutStat label="Updated" value={lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'waiting'} detail="1s polling" />
+      </section>
+
+      <section className="panel readouts-console">
+        <div className="readouts-toolbar">
+          <div className="mode-tabs" role="tablist" aria-label="Readout mode">
+            <button data-active={mode === 'conversation'} onClick={() => setMode('conversation')}>Conversation</button>
+            <button data-active={mode === 'events'} onClick={() => setMode('events')}>Event API</button>
+            <button data-active={mode === 'json'} onClick={() => setMode('json')}>Raw JSON</button>
+          </div>
+          <input
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="Filter by agent, event type, or text"
+            aria-label="Filter readouts"
+          />
+        </div>
+
+        {mode === 'conversation' && <ConversationReadout events={events} />}
+        {mode === 'events' && <EventApiReadout events={events} />}
+        {mode === 'json' && <JsonReadout session={session} storeHealth={storeHealth} />}
+      </section>
+    </main>
+  );
+}
+
+function ReadoutStat({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <article className="readout-stat">
+      <span>{label}</span>
+      <b>{value}</b>
+      <small>{detail}</small>
+    </article>
+  );
+}
+
+function ConversationReadout({ events }: { events: AgentEvent[] }) {
+  if (!events.length) return <div className="empty">No matching agent events yet.</div>;
+
+  return (
+    <div className="readout-conversation">
+      {events.map((event) => (
+        <article className="readout-message" data-type={event.type} key={event.id}>
+          <div className="readout-message-head">
+            <b>{formatActor(event.from)}</b>
+            <span>{event.type}</span>
+            <time>{new Date(event.at).toLocaleTimeString()}</time>
+          </div>
+          <p>{event.body}</p>
+          <small>{formatActor(event.from)} to {formatActor(event.to)} · event id {event.id}</small>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function EventApiReadout({ events }: { events: AgentEvent[] }) {
+  if (!events.length) return <div className="empty">No matching event API entries yet.</div>;
+
+  return (
+    <div className="api-event-list">
+      {events.map((event) => (
+        <article className="api-event" key={event.id}>
+          <pre>{JSON.stringify(event, null, 2)}</pre>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function JsonReadout({ session, storeHealth }: { session: DemoSession | null; storeHealth: StoreHealth | null }) {
+  return (
+    <div className="json-grid">
+      <article>
+        <h2>GET /api/sessions/default/state</h2>
+        <pre>{JSON.stringify({ session }, null, 2)}</pre>
+      </article>
+      <article>
+        <h2>GET /api/upstash/health</h2>
+        <pre>{JSON.stringify(storeHealth, null, 2)}</pre>
+      </article>
+    </div>
+  );
+}
+
+function formatActor(actor: string) {
+  const labels: Record<string, string> = {
+    'grid-agent': 'Grid agent',
+    'data-center-agents': 'All data centers',
+    opendss: 'OpenDSS',
+    slurm: 'Slurm scheduler',
+    operator: 'Operator',
+    'ai-agent': 'NIM agent',
+    demo: 'Demo runtime',
+  };
+  return labels[actor] ?? actor;
+}
+
+function storeHealthLabel(health: StoreHealth | null) {
+  if (!health) return 'checking';
+  if (health.mode === 'upstash' && health.ok) return 'Upstash live';
+  if (health.mode === 'memory-fallback') return 'Redis fallback';
+  if (!health.configured) return 'memory only';
+  return health.ok ? health.mode : 'store error';
+}

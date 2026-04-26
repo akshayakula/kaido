@@ -86,7 +86,10 @@ export function DataCenterClient() {
           <p className="eyebrow">Data-center agent</p>
           <h1>{datacenter?.name ?? 'Joining session...'}</h1>
         </div>
-        <a className="secondary-link" href="/join">Switch session</a>
+        <div className="hero-actions">
+          <a className="secondary-link" href="/readouts">Readouts</a>
+          <a className="secondary-link" href="/join">Switch session</a>
+        </div>
       </header>
 
       {!datacenter ? (
