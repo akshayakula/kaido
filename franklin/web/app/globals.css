@@ -3440,3 +3440,4 @@ h2 {
 .dashboard-screen.v2 .map-panel > .panel-head {
   display: none !important;
 }
+.dashboard-screen.v2 .cylinder-readout { display: none !important; }
