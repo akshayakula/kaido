@@ -282,7 +282,6 @@ export default function DashboardPage() {
           >
             <span aria-hidden="true">{allHidden ? '◉' : '○'}</span>{allHidden ? 'Show all' : 'Hide all'}
           </button>
-          <button type="button" className="dash4-reset" onClick={resetLayout} title="Reset layout">↺</button>
           <a className="dash4-link" href="/grid-sensor" title="Open Franklin sensors">
             <span aria-hidden="true">◉</span>Sensors
           </a>
