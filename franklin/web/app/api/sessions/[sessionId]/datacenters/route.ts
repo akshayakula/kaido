@@ -1,20 +1,28 @@
 import { NextResponse } from 'next/server';
 import { appendPowerFlowResult, applyGridAgentAllocation, createDataCenter } from '@/lib/simulation';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
-import { updateSession } from '@/lib/session-store';
+import { commitSession, getSession } from '@/lib/session-store';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request, { params }: { params: { sessionId: string } }) {
   const body = (await request.json().catch(() => ({}))) as { displayName?: string };
-  let datacenterId = '';
-  const session = await updateSession(params.sessionId, async (draft) => {
-    const dc = createDataCenter(draft, body.displayName);
-    datacenterId = dc.id;
-    applyGridAgentAllocation(draft);
-    draft.grid = await solveWithOpenDss(draft, draft.grid);
-    appendPowerFlowResult(draft);
-  });
+  const session = await getSession(params.sessionId);
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
-  return NextResponse.json({ sessionId: session.id, datacenterId, session }, { status: 201 });
+  const eventsBefore = session.events.length;
+
+  const dc = createDataCenter(session, body.displayName);
+  applyGridAgentAllocation(session);
+  session.grid = await solveWithOpenDss(session, session.grid);
+  appendPowerFlowResult(session);
+
+  const otherDcIds = session.datacenters.filter((d) => d.id !== dc.id).map((d) => d.id);
+  await commitSession(params.sessionId, session, {
+    meta: true,
+    grid: true,
+    dcIdsToCreate: [dc.id],
+    dcIdsToWrite: otherDcIds,
+    eventsToAppend: session.events.slice(eventsBefore),
+  });
+  return NextResponse.json({ sessionId: session.id, datacenterId: dc.id, session }, { status: 201 });
 }

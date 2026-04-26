@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { appendPowerFlowResult, applyGridAgentAllocation, setScenario } from '@/lib/simulation';
 import { addOpenAINegotiationEvent, runGridAllocatorToolCall } from '@/lib/openai-agent';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
-import { updateSession } from '@/lib/session-store';
+import { commitSession, getSession } from '@/lib/session-store';
 import type { Scenario } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -14,14 +14,22 @@ export async function POST(request: Request, { params }: { params: { sessionId: 
   if (!body?.scenario || !scenarios.has(body.scenario)) {
     return NextResponse.json({ error: 'Invalid scenario' }, { status: 400 });
   }
-  const session = await updateSession(params.sessionId, async (draft) => {
-    setScenario(draft, body.scenario!);
-    applyGridAgentAllocation(draft);
-    draft.grid = await solveWithOpenDss(draft, draft.grid);
-    appendPowerFlowResult(draft);
-    await addOpenAINegotiationEvent(draft, { kind: 'scenario_change' });
-    await runGridAllocatorToolCall(draft, { kind: 'scenario_change' });
-  });
+  const session = await getSession(params.sessionId);
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+  const eventsBefore = session.events.length;
+
+  setScenario(session, body.scenario);
+  applyGridAgentAllocation(session);
+  session.grid = await solveWithOpenDss(session, session.grid);
+  appendPowerFlowResult(session);
+  await addOpenAINegotiationEvent(session, { kind: 'scenario_change' });
+  await runGridAllocatorToolCall(session, { kind: 'scenario_change' });
+
+  await commitSession(params.sessionId, session, {
+    meta: true,
+    grid: true,
+    dcIdsToWrite: session.datacenters.map((dc) => dc.id),
+    eventsToAppend: session.events.slice(eventsBefore),
+  });
   return NextResponse.json({ session });
 }
