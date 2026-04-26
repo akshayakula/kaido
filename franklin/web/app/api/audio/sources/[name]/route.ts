@@ -4,13 +4,12 @@ import { FRANKLIN_SERVER_URL, franklinAuthHeaders } from '@/lib/franklin-server'
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export async function POST(req: NextRequest) {
+export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ name: string }> }) {
+  const { name } = await ctx.params;
   try {
-    const body = await req.text();
-    const r = await fetch(`${FRANKLIN_SERVER_URL}/api/run`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...franklinAuthHeaders() },
-      body,
+    const r = await fetch(`${FRANKLIN_SERVER_URL}/api/sources/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+      headers: franklinAuthHeaders(),
     });
     const text = await r.text();
     return new NextResponse(text, {

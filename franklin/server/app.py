@@ -70,6 +70,53 @@ jobs: dict[str, dict] = {}
 jobs_lock = threading.Lock()
 
 
+# ---------- auth ----------
+# When FRANKLIN_API_TOKEN is set, every request to /api/* and /work/* must
+# carry `Authorization: Bearer <token>` (or `?token=<token>` for raw <audio>
+# tags that can't set headers). The Next.js proxies forward this header from
+# their own FRANKLIN_API_TOKEN env var.
+_API_TOKEN = os.environ.get("FRANKLIN_API_TOKEN", "").strip()
+
+
+def _is_authed() -> bool:
+    if not _API_TOKEN:
+        return True  # auth disabled
+    header = request.headers.get("Authorization", "")
+    if header.startswith("Bearer ") and header[len("Bearer "):].strip() == _API_TOKEN:
+        return True
+    qp = request.args.get("token", "")
+    return bool(qp) and qp == _API_TOKEN
+
+
+@app.before_request
+def _gate_protected_paths():
+    path = request.path or ""
+    if path.startswith("/api/") or path.startswith("/work/"):
+        if not _is_authed():
+            return jsonify({"error": "unauthorized"}), 401
+    # /viewer/, /, /healthz left open by default
+    return None
+
+
+@app.after_request
+def _cors_headers(resp):
+    # The Next.js proxies are server-to-server, so CORS isn't strictly
+    # needed. Allow it anyway in case a browser ever hits Flask directly
+    # via a tunnel during local debugging.
+    origin = request.headers.get("Origin", "")
+    if origin:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Vary"] = "Origin"
+        resp.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+    return resp
+
+
+@app.route("/healthz")
+def healthz():
+    return jsonify({"ok": True})
+
+
 # ---------- static ----------
 @app.route("/")
 def index():
@@ -450,6 +497,108 @@ def health():
         "hf_token_set": bool(HF_TOKEN),
         "workspaces": [d.name for d in WORK.iterdir() if d.is_dir()],
     })
+
+
+# ---------- live cluster info ----------
+# Cached probe of the Lambda GPU box. SSH + nvidia-smi takes ~1-2s, so we
+# memoize for CLUSTER_TTL seconds and let multiple page loads share it.
+CLUSTER_TTL = 8.0
+_cluster_cache: dict = {"t": 0.0, "data": None}
+_cluster_lock = threading.Lock()
+
+
+def _probe_cluster() -> dict:
+    """SSH to the Lambda box and pull GPU stats. Returns a JSON-able dict."""
+    out: dict = {
+        "lambda_host": LAMBDA_HOST,
+        "online": False,
+        "gpus": [],
+        "uptime": None,
+        "loadavg": None,
+        "error": None,
+    }
+    if not Path(LAMBDA_KEY).exists():
+        out["error"] = f"key missing at {LAMBDA_KEY}"
+        return out
+
+    # nvidia-smi gives us one CSV row per GPU.
+    nv_query = "name,utilization.gpu,memory.used,memory.total,temperature.gpu"
+    remote = (
+        f"nvidia-smi --query-gpu={nv_query} --format=csv,noheader,nounits"
+        " 2>/dev/null; echo '---'; uptime"
+    )
+    try:
+        r = subprocess.run(
+            ["ssh", *SSH_OPTS, LAMBDA_HOST, remote],
+            capture_output=True, text=True, timeout=6,
+        )
+    except subprocess.TimeoutExpired:
+        out["error"] = "ssh timeout"
+        return out
+    except Exception as e:  # noqa: BLE001
+        out["error"] = f"ssh error: {e}"
+        return out
+
+    if r.returncode != 0:
+        out["error"] = (r.stderr or r.stdout or "ssh failed").strip().splitlines()[-1][:200]
+        return out
+
+    out["online"] = True
+    text = r.stdout or ""
+    parts = text.split("---", 1)
+    gpu_block = parts[0].strip()
+    tail = parts[1].strip() if len(parts) > 1 else ""
+
+    for line in gpu_block.splitlines():
+        cells = [c.strip() for c in line.split(",")]
+        if len(cells) < 5 or not cells[0]:
+            continue
+        try:
+            out["gpus"].append({
+                "name": cells[0],
+                "util_pct": int(float(cells[1])),
+                "mem_used_mb": int(float(cells[2])),
+                "mem_total_mb": int(float(cells[3])),
+                "temp_c": int(float(cells[4])),
+            })
+        except ValueError:
+            continue
+
+    # parse `uptime` line: "  12:34:56 up  3 days,  2:15,  1 user,  load average: 0.10, 0.20, 0.30"
+    if tail:
+        m = re.search(r"up\s+(.+?),\s+\d+\s+user", tail)
+        if m:
+            out["uptime"] = m.group(1).strip()
+        m = re.search(r"load average:\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)", tail)
+        if m:
+            out["loadavg"] = [float(m.group(1)), float(m.group(2)), float(m.group(3))]
+
+    return out
+
+
+@app.route("/api/cluster")
+def cluster():
+    now = time.time()
+    fresh = False
+    with _cluster_lock:
+        if _cluster_cache["data"] and now - _cluster_cache["t"] < CLUSTER_TTL:
+            data = _cluster_cache["data"]
+            fresh = True
+    if not fresh:
+        data = _probe_cluster()
+        with _cluster_lock:
+            _cluster_cache["t"] = now
+            _cluster_cache["data"] = data
+
+    with jobs_lock:
+        running = sum(1 for j in jobs.values() if j.get("state") == "running")
+        total = len(jobs)
+    payload = dict(data)
+    payload["jobs_running"] = running
+    payload["jobs_total"] = total
+    payload["cached"] = fresh
+    payload["cache_age_s"] = round(now - _cluster_cache["t"], 1) if fresh else 0.0
+    return jsonify(payload)
 
 
 if __name__ == "__main__":

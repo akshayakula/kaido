@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { FRANKLIN_SERVER_URL } from '@/lib/franklin-server';
+import { FRANKLIN_SERVER_URL, franklinAuthHeaders } from '@/lib/franklin-server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
     const r = await fetch(`${FRANKLIN_SERVER_URL}/api/upload`, {
       method: 'POST',
       body: form,
+      headers: franklinAuthHeaders(),
     });
     const text = await r.text();
     return new NextResponse(text, {

@@ -1,0 +1,12 @@
+# Don't ship build/dev cruft into the image.
+**/__pycache__
+**/*.pyc
+**/.DS_Store
+franklin/web/.next
+franklin/web/node_modules
+franklin/web/.env*
+franklin/server/work
+franklin/work
+.git
+.venv
+*.egg-info

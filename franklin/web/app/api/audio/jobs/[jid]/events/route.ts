@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { FRANKLIN_SERVER_URL } from '@/lib/franklin-server';
+import { FRANKLIN_SERVER_URL, franklinAuthHeaders } from '@/lib/franklin-server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ jid: strin
   try {
     const upstream = await fetch(
       `${FRANKLIN_SERVER_URL}/api/jobs/${encodeURIComponent(jid)}/events`,
-      { cache: 'no-store' }
+      { cache: 'no-store', headers: franklinAuthHeaders() }
     );
     if (!upstream.ok || !upstream.body) {
       return NextResponse.json({ error: `upstream ${upstream.status}` }, { status: upstream.status || 502 });

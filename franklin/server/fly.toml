@@ -1,0 +1,44 @@
+# Fly.io app config for the franklin Flask server.
+# Deploy from the repo root with the Dockerfile at franklin/server/Dockerfile:
+#
+#   cd /Users/.../kaido
+#   fly launch --no-deploy --copy-config --dockerfile franklin/server/Dockerfile
+#   fly volumes create franklin_work --size 5
+#   # secrets:
+#   fly secrets set HF_TOKEN=hf_xxx LAMBDA_HOST=ubuntu@1.2.3.4 \
+#       LAMBDA_KEY_B64="$(base64 -i ~/.ssh/lambda_kaido)" \
+#       FRANKLIN_API_TOKEN=$(openssl rand -hex 32)
+#   fly deploy --dockerfile franklin/server/Dockerfile
+
+app = "franklin-server"
+primary_region = "iad"      # Northern Virginia — close to Lambda host + your data center demo
+
+[build]
+  dockerfile = "franklin/server/Dockerfile"
+
+[env]
+  PORT = "3782"
+  LAMBDA_KEY = "/root/.ssh/lambda_kaido"
+  FRANKLIN_DATA_DIR = "/app/franklin/work"
+
+# Persistent disk for uploaded audio + job outputs.
+[[mounts]]
+  source = "franklin_work"
+  destination = "/app/franklin/work"
+
+[http_service]
+  internal_port = 3782
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 20
+    hard_limit = 25
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
