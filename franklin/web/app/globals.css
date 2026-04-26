@@ -1902,18 +1902,18 @@ h2 {
 }
 
 .dashboard-screen .site-card {
-  top: 408px;
+  top: 432px;
   left: 18px;
   max-width: 230px;
   background: rgba(23, 23, 15, 0.48);
 }
 
 .dashboard-screen .cylinder-readout {
-  top: 524px;
+  top: 552px;
   left: 18px;
   right: auto;
   width: 300px;
-  max-height: calc(100vh - 524px - 110px);
+  max-height: calc(100vh - 552px - 110px);
   min-height: 0;
   padding: 8px;
   background: rgba(23, 23, 15, 0.46);
@@ -2161,6 +2161,24 @@ h2 {
     left: 336px;
     right: 408px;
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1199px) {
+  .dashboard-screen .diagnostics-bottom {
+    display: none;
+  }
+  .dashboard-screen .diagnostics-stack {
+    width: 240px;
+    max-height: calc(100vh - 360px);
+  }
+  .dashboard-screen .cylinder-readout {
+    width: 248px;
+    max-height: calc(100vh - 552px - 90px);
+  }
+  .dashboard-screen .map-legend {
+    right: 14px;
+    bottom: 14px;
   }
 }
 
@@ -2550,4 +2568,50 @@ h2 {
   .sensor-topbar { flex-direction: column; }
   .sensor-grid--zones, .sensor-grid--devices { grid-template-columns: 1fr; }
   .sensor-components { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Phone — single-column scrollable dashboard */
+@media (max-width: 600px) {
+  .dashboard-screen {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+  }
+  .dashboard-screen .map-wrap,
+  .dashboard-screen .franklin-globe-grid,
+  .dashboard-screen .grid-empty {
+    width: 100vw;
+    height: 56vh;
+    min-height: 56vh;
+  }
+  .dashboard-screen .operator-topbar {
+    position: relative;
+    left: 0;
+    right: 0;
+    top: 0;
+    padding: 12px 14px 8px;
+  }
+  .dashboard-screen .operator-topbar h1 {
+    font-size: clamp(36px, 14vw, 56px);
+  }
+  .dashboard-screen .globe-panel > .panel-head {
+    position: relative;
+    left: 0;
+    top: 0;
+    width: calc(100vw - 28px);
+    margin: 8px 14px 0;
+  }
+  .dashboard-screen .diagnostics-stack {
+    position: relative;
+    left: 0;
+    right: 0;
+    top: 0;
+    width: calc(100vw - 28px);
+    max-height: none;
+    margin: 8px 14px 14px;
+    overflow: visible;
+  }
+  .dashboard-screen .map-legend {
+    display: none;
+  }
 }

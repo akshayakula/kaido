@@ -39,16 +39,24 @@ export function createSession(): DemoSession {
 }
 
 // Real Loudoun / Prince William datacenter campus locations — used to seed
-// the dashboard with believable Ashburn-area coordinates rather than a random
-// angular spread. Seeded round-robin in createDataCenter.
+// the dashboard with believable Ashburn-area coordinates. Each entry is
+// spaced at least ~3 km from every other so the cylinder pucks never
+// overlap visually. Round-robin assigned in createDataCenter; if more DCs
+// are joined than there are slots, jitter is amplified so duplicates land
+// in non-overlapping orbits around the canonical campus.
 const ASHBURN_DC_COORDS: Array<[number, number, string]> = [
   [39.0166, -77.4769, 'Equinix DC2/DC4 (Ashburn)'],
+  [39.0294, -77.4929, 'QTS Ashburn'],
+  [39.0438, -77.4874, 'NoVA Fabric (Ashburn N)'],
   [39.0066, -77.4291, 'Digital Realty (Sterling)'],
-  [38.9587, -77.3570, 'Iron Mountain (Reston)'],
+  [39.0203, -77.4068, 'CyrusOne (Sterling E)'],
+  [38.9605, -77.3566, 'CoreSite VA3 (Reston)'],
+  [38.9333, -77.4467, 'CoreSite VA1 (Reston W)'],
+  [38.9120, -77.3870, 'Iron Mountain (Reston S)'],
   [39.1116, -77.5636, 'Loudoun (Leesburg)'],
+  [39.1287, -77.5587, 'Aligned (Leesburg N)'],
   [38.7509, -77.4753, 'Cologix (Manassas)'],
-  [38.9333, -77.4467, 'CoreSite (Reston West)'],
-  [39.0438, -77.4874, 'NoVA Fabric (Ashburn)'],
+  [38.7920, -77.5060, 'Iron Mountain (Manassas N)'],
 ];
 
 export function createSessionWithId(id: string): DemoSession {
@@ -82,15 +90,20 @@ export function createSessionWithId(id: string): DemoSession {
 
 export function createDataCenter(session: DemoSession, displayName?: string): DataCenterAgent {
   const n = session.datacenters.length + 1;
-  // Round-robin through the canonical Ashburn-area campus list. Tiny
-  // gaussian-ish jitter keeps adjacent virtual DCs from colliding.
+  // Round-robin through the canonical Ashburn-area campus list. When more
+  // DCs are added than slots, push duplicates onto a wider orbit so they
+  // don't stack on top of the original campus.
   const slot = ASHBURN_DC_COORDS[(n - 1) % ASHBURN_DC_COORDS.length];
-  const jitter = 0.005 * (((n * 1103515245) % 1000) / 1000 - 0.5);
+  const overflow = Math.floor((n - 1) / ASHBURN_DC_COORDS.length);
+  // Deterministic angle around the campus for each overflow ring.
+  const angle = ((n * 2654435761) % 360) * (Math.PI / 180);
+  // Base radius 0.004° ≈ 440 m; +0.012° ≈ 1.3 km per overflow ring.
+  const r = 0.004 + overflow * 0.012;
   const dc: DataCenterAgent = {
     id: crypto.randomUUID().slice(0, 10),
     name: displayName?.trim() || slot[2],
-    lat: slot[0] + jitter,
-    lng: slot[1] + jitter * 1.3,
+    lat: slot[0] + Math.sin(angle) * r,
+    lng: slot[1] + Math.cos(angle) * r,
     joinedAt: Date.now(),
     gpuCount: 96 + (n % 5) * 48,
     gpuKw: 0.72 + (n % 3) * 0.04,
@@ -122,11 +135,22 @@ export function normalizeSession(session: DemoSession) {
   }
   session.datacenters.forEach((dc, i) => {
     const distFromAshburn = Math.hypot(dc.lat - 39.04, dc.lng - -77.49);
-    if (distFromAshburn > 0.5) {
+    // Migrate any DC that's >0.5° from Ashburn (legacy / random coords)
+    // OR within 0.0025° (~280 m) of another DC — the latter catches stale
+    // sessions where two DCs happen to share a slot from the older logic.
+    const tooFar = distFromAshburn > 0.5;
+    const tooClose = session.datacenters.some(
+      (other) =>
+        other !== dc &&
+        Math.hypot(dc.lat - other.lat, dc.lng - other.lng) < 0.0025,
+    );
+    if (tooFar || tooClose) {
       const slot = ASHBURN_DC_COORDS[i % ASHBURN_DC_COORDS.length];
-      const jitter = 0.005 * ((((i + 1) * 1103515245) % 1000) / 1000 - 0.5);
-      dc.lat = slot[0] + jitter;
-      dc.lng = slot[1] + jitter * 1.3;
+      const overflow = Math.floor(i / ASHBURN_DC_COORDS.length);
+      const angle = (((i + 1) * 2654435761) % 360) * (Math.PI / 180);
+      const r = 0.004 + overflow * 0.012;
+      dc.lat = slot[0] + Math.sin(angle) * r;
+      dc.lng = slot[1] + Math.cos(angle) * r;
     }
   });
   session.datacenters.forEach((dc, index) => {

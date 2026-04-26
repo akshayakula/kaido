@@ -364,7 +364,9 @@ function updateMapSources(map: mapboxgl.Map, view: GridView) {
       type: 'Feature',
       geometry: {
         type: 'Polygon',
-        coordinates: [circlePolygon(node.lng, node.lat, 0.005 + node.loadSignal * 0.012)],
+        // Radius capped at ~0.0095° (~1.05 km) so adjacent campuses don't
+        // overlap visually at zoom 9-10.
+        coordinates: [circlePolygon(node.lng, node.lat, 0.0035 + node.loadSignal * 0.006)],
       },
       properties: {
         color: node.color,
