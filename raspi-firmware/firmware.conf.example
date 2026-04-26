@@ -1,0 +1,25 @@
+# raspi-firmware config (sourced by main.py via systemd EnvironmentFile)
+#
+# Lives on the FAT boot partition so it can be edited from any computer
+# with the SD in a reader.
+#   On running Pi:    /boot/firmware/firmware.conf
+#   With SD on Mac:   /Volumes/bootfs/firmware.conf
+
+# --- identity ---
+PI_NAME=pi-load1
+DEVICE_ID=load1
+DEVICE_ZONE=DOM
+DEVICE_PROFILE=substation     # any descriptor: substation/datacenter/lab/unknown
+
+# --- upstash redis (REST) ---
+UPSTASH_REDIS_REST_URL=https://fresh-oryx-106816.upstash.io
+UPSTASH_REDIS_REST_TOKEN=replace-me
+TELEMETRY_KEY=telemetry
+TELEMETRY_MAX=1000
+
+# --- sensor / ring tuning ---
+SAMPLE_INTERVAL_S=2
+BASELINE_SAMPLES=10
+TEMP_THRESHOLD_C=2.5
+STABLE_WINDOW_S=30
+STABLE_STDDEV_C=0.15

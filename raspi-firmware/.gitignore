@@ -1,0 +1,4 @@
+firmware.conf
+.env
+*.pyc
+__pycache__/

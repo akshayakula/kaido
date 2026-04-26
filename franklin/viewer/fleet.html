@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>franklin · fleet</title>
+<style>
+  :root {
+    --bg: #07070a; --bg2: #0e0e14; --panel: #14141d; --panel2: #1a1a25;
+    --border: #25253a; --fg: #e7e7ee; --muted: #6a6a78;
+    --accent: #ffb454; --target: #34d399; --residual: #60a5fa;
+    --health: #34d399; --warn: #f59e0b; --bad: #f87171;
+    --normal: #34d399; --stressed: #f59e0b; --emergency: #f87171; --recovering: #60a5fa; --offline: #6a6a78;
+  }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font:13px/1.5 ui-monospace,"SF Mono",Menlo,monospace; }
+  header { padding:18px 24px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  header h1 { margin:0; font-size:14px; font-weight:700; letter-spacing:.04em; }
+  header h1 small { color:var(--muted); margin-left:10px; font-weight:400; }
+  nav.tabs a { color:var(--muted); margin-left:14px; text-decoration:none; padding:6px 10px; border-radius:4px; }
+  nav.tabs a.active { color:var(--accent); background:rgba(255,180,84,.08); }
+
+  main { padding:18px 24px; display:grid; gap:18px; max-width:1400px; margin:0 auto; }
+
+  .zones { display:grid; gap:14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .zone-card {
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    padding:18px; display:grid; gap:6px;
+  }
+  .zone-card h2 { margin:0; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; }
+  .zone-card .big { font-size:42px; font-weight:600; line-height:1; }
+  .zone-card .label { font-size:11px; color:var(--muted); }
+  .zone-card .row { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); }
+  .zone-card .row strong { color:var(--fg); }
+  .zone-card .bar { height:8px; background:var(--panel2); border-radius:4px; overflow:hidden; margin-top:6px; }
+  .zone-card .bar > div { height:100%; transition: width .3s; }
+
+  .section-title { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.12em; margin:8px 0 -6px; }
+
+  .devices { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+  .device-card {
+    background:var(--panel); border:1px solid var(--border); border-radius:8px;
+    padding:14px; display:grid; gap:10px;
+  }
+  .device-card.s-EMERGENCY  { border-color: rgba(248,113,113,.5); box-shadow: 0 0 0 1px rgba(248,113,113,.2) inset; }
+  .device-card.s-STRESSED   { border-color: rgba(245,158,11,.4); }
+  .device-card.s-RECOVERING { border-color: rgba(96,165,250,.4); }
+  .device-card.s-NORMAL     { border-color: rgba(52,211,153,.3); }
+  .device-card.s-OFFLINE    { opacity: .5; }
+
+  .device-card .top { display:flex; justify-content:space-between; align-items:start; gap:10px; }
+  .device-card .name { font-weight:600; font-size:14px; }
+  .device-card .name .zone { color:var(--muted); margin-left:8px; font-weight:400; font-size:11px; }
+  .pill { padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+  .pill.NORMAL    { background:rgba(52,211,153,.15);  color: var(--normal); }
+  .pill.STRESSED  { background:rgba(245,158,11,.15);  color: var(--stressed); }
+  .pill.EMERGENCY { background:rgba(248,113,113,.18); color: var(--emergency); }
+  .pill.RECOVERING{ background:rgba(96,165,250,.15);  color: var(--recovering); }
+  .pill.OFFLINE   { background:var(--panel2);          color: var(--muted); }
+
+  .health-row { display:grid; grid-template-columns: 100px 1fr 60px; gap:8px; align-items:center; }
+  .health-row .lbl { color:var(--muted); font-size:11px; }
+  .health-row .bar { height:10px; background:var(--panel2); border-radius:5px; overflow:hidden; }
+  .health-row .bar > div { height:100%; }
+  .health-row .val { font-size:11px; text-align:right; color:var(--muted); }
+
+  .components { display:grid; gap:6px; grid-template-columns: 1fr 1fr; }
+  .components .ck { display:flex; align-items:center; gap:6px; font-size:11px; }
+  .components .ck .dot { width:6px; height:6px; border-radius:50%; }
+  .components .ck.thermal .dot { background:#f87171; }
+  .components .ck.humidity .dot { background:#60a5fa; }
+  .components .ck.audio .dot { background:#fbbf24; }
+  .components .ck.joint .dot { background:#a78bfa; }
+  .components .ck.stability .dot { background:#34d399; }
+  .components .ck .nm { color:var(--muted); flex:1; }
+  .components .ck .v { color:var(--fg); }
+
+  .flags { display:flex; gap:6px; flex-wrap:wrap; }
+  .flag { font-size:10px; padding:2px 8px; border-radius:4px;
+    background: rgba(248,113,113,.12); color: var(--bad);
+    border: 1px solid rgba(248,113,113,.3); }
+
+  .telemetry { display:grid; gap:4px; grid-template-columns: 1fr 1fr 1fr; font-size:11px; padding-top:6px; border-top:1px dashed var(--border); }
+  .telemetry .k { color:var(--muted); font-size:10px; }
+  .telemetry .v { color:var(--fg); }
+
+  .events { padding:10px 14px; background:var(--panel); border:1px solid var(--border); border-radius:8px; max-height:240px; overflow-y:auto; }
+  .events table { width:100%; border-collapse:collapse; font-size:11px; }
+  .events th { text-align:left; color:var(--muted); font-weight:400; padding:4px 6px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--panel); }
+  .events td { padding:4px 6px; border-bottom:1px solid rgba(255,255,255,.04); }
+  .events tr:last-child td { border-bottom:0; }
+
+  footer { padding: 14px 24px; color: var(--muted); font-size:11px; border-top:1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>franklin <small>fleet · transformer health</small></h1>
+  <nav class="tabs">
+    <a href="/viewer/fleet.html" class="active">fleet</a>
+    <a href="/viewer/">audio analysis</a>
+  </nav>
+</header>
+
+<main>
+  <div class="section-title">zones</div>
+  <div class="zones" id="zones">…</div>
+
+  <div class="section-title">devices</div>
+  <div class="devices" id="devices">…</div>
+
+  <div class="section-title">recent events</div>
+  <div class="events" id="events"><em>—</em></div>
+</main>
+
+<footer>
+  Fused per device every <strong>30 s</strong> by <code>fusion.runner</code>. Health = <code>1 −
+  Σ(weight × penalty)</code> over thermal, audio, humidity, joint, stability. Zone resilience adds a
+  state-transition flap penalty. Auto-refreshes every 5s.
+</footer>
+
+<script>
+const fmt = (x, d=2) => (x === null || x === undefined || Number.isNaN(x)) ? "—" : Number(x).toFixed(d);
+const healthColor = h => h == null ? "#6a6a78" :
+  h > 0.85 ? "#34d399" : h > 0.55 ? "#f59e0b" : "#f87171";
+const ts = t => new Date(t * 1000).toLocaleTimeString();
+
+async function refresh(){
+  const [zonesR, devsR, evtsR] = await Promise.all([
+    fetch("/api/zones").then(r=>r.json()),
+    fetch("/api/devices").then(r=>r.json()),
+    fetch("/api/events").then(r=>r.json()),
+  ]);
+  renderZones(zonesR);
+  renderDevices(devsR);
+  renderEvents(evtsR);
+}
+
+function renderZones(zones){
+  const root = document.getElementById("zones");
+  const entries = Object.entries(zones || {});
+  if (!entries.length){ root.innerHTML = `<div class="zone-card">no zones yet</div>`; return; }
+  root.innerHTML = entries.map(([name, z]) => {
+    const h = z.zone_resilience;
+    const c = healthColor(h);
+    return `
+      <div class="zone-card">
+        <h2>zone ${name}</h2>
+        <div class="big" style="color:${c}">${fmt(h)}</div>
+        <div class="label">resilience</div>
+        <div class="bar"><div style="background:${c};width:${(h||0)*100}%"></div></div>
+        <div class="row"><span>min health</span><strong>${fmt(z.min_health)}</strong></div>
+        <div class="row"><span>mean health</span><strong>${fmt(z.mean_health)}</strong></div>
+        <div class="row"><span>emergency</span><strong>${(z.emergency_fraction*100).toFixed(0)}%</strong></div>
+        <div class="row"><span>devices</span><strong>${z.device_count}</strong></div>
+        <div class="row"><span>transitions/hr</span><strong>${fmt(z.transitions_per_hour, 2)}</strong></div>
+      </div>`;
+  }).join("");
+}
+
+function renderDevices(devs){
+  const root = document.getElementById("devices");
+  if (!devs.length){ root.innerHTML = `<div class="device-card">no devices</div>`; return; }
+  root.innerHTML = devs.map(d => {
+    const h = d.health;
+    const c = healthColor(h);
+    const tele = d.latest_telemetry || {};
+    const f = d.latest_features || {};
+    const comps = d.components || {};
+    const flags = (d.flags || []).map(f => `<span class="flag">${f}</span>`).join("");
+    return `
+      <div class="device-card s-${d.state}">
+        <div class="top">
+          <div class="name">${d.device}<span class="zone">· ${d.zone || "—"} · ${d.profile || ""}</span></div>
+          <span class="pill ${d.state}">${d.state}</span>
+        </div>
+        <div class="health-row">
+          <span class="lbl">health</span>
+          <div class="bar"><div style="background:${c};width:${(h||0)*100}%"></div></div>
+          <span class="val">${fmt(h)}</span>
+        </div>
+        <div class="components">
+          ${["thermal","audio","humidity","joint","stability"].map(k => `
+            <div class="ck ${k}"><div class="dot"></div><span class="nm">${k}</span><span class="v">${fmt(comps[k])}</span></div>
+          `).join("")}
+        </div>
+        ${flags ? `<div class="flags">${flags}</div>` : ""}
+        <div class="telemetry">
+          <div><div class="k">temp</div><div class="v">${fmt(tele.temp_c, 1)} °C (Δ ${fmt(f.temp_delta, 1)})</div></div>
+          <div><div class="k">humidity</div><div class="v">${fmt(tele.humidity, 1)}% (dew Δ ${fmt(f.dew_point_margin, 1)})</div></div>
+          <div><div class="k">pop rate</div><div class="v">${fmt(f.pop_rate, 2)} /s</div></div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function renderEvents(evts){
+  const root = document.getElementById("events");
+  if (!evts.length){ root.innerHTML = "<em>no events yet</em>"; return; }
+  root.innerHTML = `<table>
+    <thead><tr><th>time</th><th>device</th><th>kind</th><th>from</th><th>to</th><th>flags</th></tr></thead>
+    <tbody>${evts.map(e => `<tr>
+      <td>${ts(e.ts)}</td>
+      <td>${e.device}</td>
+      <td>${e.kind}</td>
+      <td>${e.from || "—"}</td>
+      <td><span class="pill ${e.to || ""}">${e.to || ""}</span></td>
+      <td>${(e.flags || []).join(", ")}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

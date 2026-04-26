@@ -64,7 +64,7 @@ jobs_lock = threading.Lock()
 # ---------- static ----------
 @app.route("/")
 def index():
-    return redirect("/viewer/")
+    return redirect("/viewer/fleet.html")
 
 
 @app.route("/viewer/")
@@ -255,6 +255,68 @@ def job_events(jid: str):
                 break
             time.sleep(0.4)
     return Response(gen(), mimetype="text/event-stream")
+
+
+@app.route("/api/devices")
+def list_devices_api():
+    from fusion.upstash import (DEVICES_KEY, EVENTS_KEY, Upstash,
+                                k_audio, k_latest, k_meta, k_score, k_tele,
+                                k_zone_devs)
+    u = Upstash()
+    devs = sorted(u.smembers(DEVICES_KEY))
+    out = []
+    for dev in devs:
+        meta = u.get_json(k_meta(dev)) or {}
+        score = u.get_json(k_score(dev)) or {}
+        tele = u.get_json(k_latest(dev)) or {}
+        out.append({
+            "device": dev,
+            "zone": meta.get("zone"),
+            "profile": meta.get("profile"),
+            "state": score.get("state", "OFFLINE"),
+            "health": score.get("health"),
+            "components": score.get("components"),
+            "flags": score.get("flags", []),
+            "transitions_24h": score.get("transitions_24h"),
+            "latest_telemetry": tele or None,
+            "latest_features": score.get("features"),
+        })
+    return jsonify(out)
+
+
+@app.route("/api/devices/<dev>")
+def device_detail(dev: str):
+    from fusion.upstash import (Upstash, k_audio, k_latest, k_meta, k_score,
+                                k_tele)
+    u = Upstash()
+    return jsonify({
+        "device": dev,
+        "meta": u.get_json(k_meta(dev)),
+        "score": u.get_json(k_score(dev)),
+        "latest_telemetry": u.get_json(k_latest(dev)),
+        "telemetry_history": u.lrange_json(k_tele(dev), 0, 199),
+        "audio_history": u.lrange_json(k_audio(dev), 0, 39),
+    })
+
+
+@app.route("/api/zones")
+def list_zones_api():
+    from fusion.upstash import (Upstash, k_zone_devs, k_zone_score)
+    u = Upstash()
+    out = {}
+    # find zones via the Upstash key listing — Upstash REST exposes KEYS
+    keys = u.cmd("KEYS", "zone:*:score") or []
+    for k in keys:
+        zone = k.split(":")[1]
+        out[zone] = u.get_json(k)
+    return jsonify(out)
+
+
+@app.route("/api/events")
+def list_events():
+    from fusion.upstash import EVENTS_KEY, Upstash
+    u = Upstash()
+    return jsonify(u.lrange_json(EVENTS_KEY, 0, 99))
 
 
 @app.route("/api/health")

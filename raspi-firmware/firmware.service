@@ -1,0 +1,19 @@
+[Unit]
+Description=Load-monitor firmware (Si7021 + NeoPixel ring + Upstash)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/boot/firmware/firmware.conf
+ExecStart=/usr/bin/python3 /usr/local/lib/raspi-firmware/main.py
+WorkingDirectory=/usr/local/lib/raspi-firmware
+Restart=on-failure
+RestartSec=3
+# rpi_ws281x needs /dev/mem for PWM DMA
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
