@@ -73,10 +73,39 @@ export function DataCenterClient() {
     router.push('/join');
   }
 
-  const datacenter = useMemo<DataCenterAgent | undefined>(
+  const liveDc = useMemo<DataCenterAgent | undefined>(
     () => session?.datacenters.find((dc) => dc.id === datacenterId),
     [datacenterId, session]
   );
+  // Fallback stub used while the DC isn't yet in the session view (or has been
+  // removed upstream but the user still has the URL). Lets the participant UI
+  // render and POST updates without showing a "not found" wall.
+  const datacenter: DataCenterAgent | undefined = useMemo(() => {
+    if (liveDc) return liveDc;
+    if (!datacenterId) return undefined;
+    const saved = loadJoinIdentity(params.sessionId);
+    return {
+      id: datacenterId,
+      name: saved?.displayName || 'Data center',
+      lat: 39.04,
+      lng: -77.49,
+      joinedAt: Date.now(),
+      gpuCount: 96,
+      gpuKw: 0.72,
+      baseKw: 420,
+      queueDepth: 0,
+      desiredUtilization: 0.4,
+      actualUtilization: 0.0,
+      schedulerCap: 0.86,
+      latencyMs: 38,
+      batteryKwh: 480,
+      batterySoc: 0.72,
+      batterySupportKw: 0,
+      priority: 0.5,
+      lastInstruction: 'Connecting to grid…',
+      slurm: undefined,
+    } as unknown as DataCenterAgent;
+  }, [liveDc, datacenterId, params.sessionId]);
 
   async function refresh() {
     let response = await fetch(`/api/sessions/${params.sessionId}/state`);
@@ -171,15 +200,12 @@ export function DataCenterClient() {
         </div>
       </header>
 
-      {!datacenter ? (
+      {!datacenterId ? (
         <section className="panel empty-state">
-          <p>{session ? 'Your data center is no longer in the session.' : 'Loading session…'}</p>
-          {session && (
-            <button type="button" onClick={manualRejoin} disabled={reconnecting}>
-              {reconnecting ? 'Reconnecting…' : 'Reconnect as a new data center'}
-            </button>
-          )}
+          <p>No data-center id in URL. Visit /join to register.</p>
         </section>
+      ) : !datacenter ? (
+        <section className="panel empty-state">Loading session…</section>
       ) : (
         <section className="phone-grid">
           <article className="status-card" data-health={session?.grid.health ?? 'normal'}>
