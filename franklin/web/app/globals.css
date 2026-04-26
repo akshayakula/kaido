@@ -3574,3 +3574,44 @@ h2 {
     pointer-events: auto;
   }
 }
+
+/* =====================================================================
+   Floating cards laid out at separate spots — not all stacked right.
+   Each card is independently positioned + independently draggable.
+   ===================================================================== */
+.dashboard-screen.v2 .diagnostics-stack {
+  position: absolute;
+  inset: 70px 18px 18px 18px;
+  width: auto;
+  display: block;
+  background: transparent;
+  border: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.dashboard-screen.v2 .diagnostics-stack .lower-grid.diagnostics-bottom {
+  display: contents;
+}
+.dashboard-screen.v2 .diagnostics-stack > .status-card,
+.dashboard-screen.v2 .diagnostics-stack > .metrics,
+.dashboard-screen.v2 .diagnostics-stack > .terminal-panel,
+.dashboard-screen.v2 .diagnostics-stack .gpu-scheduler-panel,
+.dashboard-screen.v2 .diagnostics-stack .negotiation-panel {
+  position: absolute;
+  pointer-events: auto;
+  width: 320px;
+  margin: 0;
+}
+
+/* Default positions on the dashboard area */
+.dashboard-screen.v2 .status-card        { top: 0;     right: 0;   width: 240px; }
+.dashboard-screen.v2 .metrics            { top: 130px; right: 0;   width: 280px; }
+.dashboard-screen.v2 .gpu-scheduler-panel{ top: 0;     left: 0;    width: 340px; }
+.dashboard-screen.v2 .negotiation-panel  { bottom: 0;  left: 0;    width: 340px; }
+.dashboard-screen.v2 .terminal-panel     { bottom: 0;  right: 0;   width: 340px; }
+
+/* Hide the residual join-card (CTA already lives in the topbar) */
+.dashboard-screen.v2 .diagnostics-stack > .join-card { display: none; }
+
+/* The floating-panel transform still applies on top of the absolute
+   default position — drag offsets stack with the default placement. */

@@ -45,12 +45,11 @@ export default function DashboardPage() {
   useEffect(() => {
     type Target = { sel: string; label: string; defaultCollapsed?: boolean };
     const targets: Target[] = [
-      { sel: '.dashboard-screen .cylinder-readout',     label: 'Cylinder live read',  defaultCollapsed: true },
-      { sel: '.dashboard-screen .diagnostics-stack',    label: 'Diagnostics' },
-      { sel: '.dashboard-screen .gpu-scheduler-panel',  label: 'GPU scheduler',       defaultCollapsed: true },
-      { sel: '.dashboard-screen .negotiation-panel',    label: 'Agent conversation',  defaultCollapsed: true },
+      { sel: '.dashboard-screen .status-card',          label: 'Grid status' },
+      { sel: '.dashboard-screen .metrics',              label: 'Metrics' },
+      { sel: '.dashboard-screen .gpu-scheduler-panel',  label: 'GPU scheduler' },
+      { sel: '.dashboard-screen .negotiation-panel',    label: 'Agent conversation' },
       { sel: '.dashboard-screen .terminal-panel',       label: 'OpenDSS terminal' },
-      { sel: '.dashboard-screen .site-card',            label: 'Grid agent' },
     ];
 
     const cleanups: Array<() => void> = [];

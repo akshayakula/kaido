@@ -47,7 +47,7 @@ export function createSession(): DemoSession {
 const ASHBURN_DC_COORDS: Array<[number, number, string]> = [
   [39.0166, -77.4769, 'Equinix DC2/DC4 (Ashburn)'],
   [39.0294, -77.4929, 'QTS Ashburn'],
-  [39.0438, -77.4874, 'NoVA Fabric (Ashburn N)'],
+  [39.1488, -77.5210, 'Stack (Round Hill / Leesburg N)'],   // DC3 — bumped well north
   [39.0066, -77.4291, 'Digital Realty (Sterling)'],
   [39.0203, -77.4068, 'CyrusOne (Sterling E)'],
   [38.9605, -77.3566, 'CoreSite VA3 (Reston)'],
