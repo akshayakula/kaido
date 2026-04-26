@@ -47,7 +47,6 @@ export function JoinPanel({
   }
 
   async function remove(id: string, name: string) {
-    if (!confirm(`Remove ${name} from Upstash and the grid?`)) return;
     setBusy(id);
     try {
       await onDeleteDc(id, name);
