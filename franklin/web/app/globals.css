@@ -4757,11 +4757,12 @@ h2 {
    Dashboard v4 — full overhaul.
    =========================================================== */
 .dashboard-screen.v4 {
-  display: flex;
-  flex-direction: column;
+  position: fixed;
+  inset: 0;
   background: var(--background, #141612);
-  min-height: 100vh;
   padding: 0;
+  margin: 0;
+  overflow: hidden;
   --tone-ok: #5fd38a;
   --tone-warn: #f2d36b;
   --tone-critical: #e27b63;
@@ -5554,3 +5555,188 @@ h2 {
 .dashboard-screen.v4 .lower-grid,
 .dashboard-screen.v4 .a2a-chat,
 .dashboard-screen.v4 .fp-bar { display: none !important; }
+
+/* ===========================================================
+   Dashboard v4 overlay rev — floating panels over fullscreen map.
+   =========================================================== */
+.dashboard-screen.v4 .dash4-mapbg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.dashboard-screen.v4 .dash4-mapbg .franklin-globe-grid,
+.dashboard-screen.v4 .dash4-mapbg .mapbox-globe-grid { height: 100%; width: 100%; }
+.dashboard-screen.v4 .dash4-mapbg .mapbox-globe-canvas { height: 100%; width: 100%; }
+.dashboard-screen.v4 .dash4-mapbg .grid-empty {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(228, 226, 201, 0.65);
+  font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+}
+
+.dashboard-screen.v4 .dash4-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+.dashboard-screen.v4 .dash4-overlay > * { pointer-events: auto; }
+
+.dashboard-screen.v4 .dash4-hud {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(10, 11, 8, 0.55);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(228, 226, 201, 0.14);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.dashboard-screen.v4 .dash4-brand {
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  font-size: 11px;
+  color: var(--foreground, #e4e2c9);
+  text-decoration: none;
+  padding: 0 6px;
+}
+.dashboard-screen.v4 .dash4-link {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tone-ok);
+  text-decoration: none;
+  padding: 4px 10px;
+  border: 1px solid rgba(95, 211, 138, 0.45);
+  border-radius: 999px;
+}
+.dashboard-screen.v4 .dash4-link:hover { background: rgba(95, 211, 138, 0.12); }
+.dashboard-screen.v4 .dash4-status,
+.dashboard-screen.v4 .dash4-iso {
+  background: transparent;
+  border: 1px solid rgba(228, 226, 201, 0.18);
+}
+
+/* Floating panels — transparent / blurred over the map. */
+.fpanel {
+  position: absolute;
+  width: 360px;
+  max-width: calc(100vw - 36px);
+  max-height: calc(100vh - 80px);
+  background: rgba(12, 13, 9, 0.62);
+  backdrop-filter: blur(18px) saturate(1.1);
+  border: 1px solid rgba(228, 226, 201, 0.16);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.45);
+  transition: box-shadow 180ms ease, border-color 180ms ease, opacity 160ms ease;
+  z-index: 6;
+}
+.fpanel:hover { border-color: rgba(228, 226, 201, 0.28); }
+.fpanel--dragging {
+  opacity: 0.92;
+  box-shadow: 0 28px 48px rgba(0, 0, 0, 0.6);
+  border-color: var(--tone-ok);
+}
+.fpanel--collapsed { box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35); }
+
+.fpanel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(228, 226, 201, 0.1);
+  cursor: grab;
+  user-select: none;
+}
+.fpanel--dragging .fpanel__head { cursor: grabbing; }
+.fpanel__title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fpanel__title .eyebrow {
+  margin: 0;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(228, 226, 201, 0.5);
+}
+.fpanel__title h2 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: var(--foreground, #e4e2c9);
+}
+.fpanel__chev {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--foreground, #e4e2c9);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fpanel__chev:hover { border-color: rgba(228, 226, 201, 0.25); }
+
+.fpanel__body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 240ms cubic-bezier(.2,.8,.2,1);
+  min-height: 0;
+}
+.fpanel--collapsed .fpanel__body { grid-template-rows: 0fr; }
+.fpanel__body-inner {
+  overflow: auto;
+  min-height: 0;
+}
+.fpanel:not(.fpanel--collapsed) .fpanel__body-inner {
+  padding: 10px;
+  max-height: calc(100vh - 140px);
+}
+
+/* Force the OpenDSS svg to fit the floating-panel width */
+.fpanel .dss2 { gap: 8px; }
+.fpanel .dss2__svg { max-height: 220px; }
+.fpanel .dss2__head { gap: 6px; }
+.fpanel .dss2__stat { padding: 4px 8px; }
+.fpanel .dss2__stat b { font-size: 12px; }
+
+/* Panel-specific widths */
+.fpanel[data-panel-id="opendss"]  { width: 420px; }
+.fpanel[data-panel-id="readouts"] { width: 320px; }
+.fpanel[data-panel-id="a2a"]      { width: 380px; }
+.fpanel[data-panel-id="join"]     { width: 340px; }
+
+/* Mobile: stack panels along the bottom, full-width, drag disabled */
+@media (max-width: 900px) {
+  .dashboard-screen.v4 .dash4-hud { gap: 4px; padding: 4px 6px; }
+  .dashboard-screen.v4 .dash4-hud .dash4-iso,
+  .dashboard-screen.v4 .dash4-hud .dash4-status { display: none; }
+  .fpanel {
+    position: relative !important;
+    left: 0 !important; right: 0 !important; top: auto !important; bottom: auto !important;
+    width: auto !important;
+    max-width: none;
+    margin: 0 12px 8px;
+  }
+  .dashboard-screen.v4 .dash4-overlay {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 64px;
+    padding-bottom: 12px;
+    overflow-y: auto;
+    pointer-events: auto;
+    background: linear-gradient(180deg, rgba(10,11,8,0) 0%, rgba(10,11,8,0.5) 30%, rgba(10,11,8,0.85) 100%);
+  }
+  .dashboard-screen.v4 .dash4-mapbg { height: 50vh; bottom: auto; }
+  .fpanel__head { cursor: default; }
+}

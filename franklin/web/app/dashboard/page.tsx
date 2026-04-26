@@ -133,72 +133,183 @@ export default function DashboardPage() {
     setLayout({ order: DEFAULT_ORDER, collapsed: {} });
   }
 
+  // Default corner positions for floating panels (px from edges).
+  const DEFAULT_POSITIONS: Record<string, { x: number; y: number }> = {
+    opendss:  { x: 18,  y: 18 },
+    readouts: { x: -18, y: 18 },
+    a2a:      { x: -18, y: -18 },
+    join:     { x: 18,  y: -18 },
+  };
+
   return (
     <main className="dashboard-screen v4">
-      <header className="dash4-topbar">
-        <a className="brand-link" href="/" aria-label="Franklin home">Franklin</a>
-        <span className="dash4-status" data-health={session?.grid.health ?? 'normal'}>
-          <i />{session?.grid.health?.toUpperCase() ?? '…'} · {session?.site.region ?? ''}
-        </span>
-        <span className="dash4-iso" title="Virginia is in PJM ISO">PJM ISO · DOM</span>
-        {session && (
-          <select className="dash4-scenario" value={session.scenario} onChange={(e) => changeScenario(e.target.value as Scenario)}>
-            {scenarioOptions.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
-        )}
-        <div className="dash4-actions">
-          <button type="button" className="dash4-reset" onClick={resetLayout} title="Reset layout">↺</button>
-          <a className="hdr-btn" href="/grid-sensor">Sensors</a>
-          <a className="hdr-btn hdr-btn--primary" href="/join">Join →</a>
-        </div>
-      </header>
-
-      <section className="dash4-map">
+      <div className="dash4-mapbg">
         <GridMap session={session} />
-        {session && <small className="dash4-map__brief">{scenarioBrief(session.scenario)}</small>}
-      </section>
+      </div>
 
-      <PjmStatus />
+      <div className="dash4-overlay">
+        <div className="dash4-hud">
+          <a className="dash4-brand" href="/" aria-label="Franklin home">FRANKLIN</a>
+          <span className="dash4-status" data-health={session?.grid.health ?? 'normal'}>
+            <i />{session?.grid.health?.toUpperCase() ?? '…'} · {session?.site.region ?? ''}
+          </span>
+          <span className="dash4-iso" title="Virginia is in PJM ISO">PJM · DOM</span>
+          {session && (
+            <select className="dash4-scenario" value={session.scenario} onChange={(e) => changeScenario(e.target.value as Scenario)}>
+              {scenarioOptions.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          )}
+          <button type="button" className="dash4-reset" onClick={resetLayout} title="Reset layout">↺</button>
+          <a className="dash4-link" href="/join">Join →</a>
+        </div>
 
-      <div className={`dash4-grid ${dragId ? 'dash4-grid--dragging' : ''}`}>
         {layout.order.map((id) => {
           const meta = panelMap[id];
           if (!meta) return null;
           const collapsed = !!layout.collapsed[id];
           const onToggle = () =>
             setLayout({ ...layout, collapsed: { ...layout.collapsed, [id]: !collapsed } });
-          const isHover = hoverId === id && dragId !== id;
-          const isDrag = dragId === id;
+          const pos = DEFAULT_POSITIONS[id] ?? { x: 18, y: 18 };
           return (
-            <div
+            <FloatingPanel
               key={id}
-              className={`dash4-slot dash4-slot--${id} ${isHover ? 'is-hover' : ''} ${isDrag ? 'is-drag' : ''}`}
-              data-panel-id={id}
+              id={id}
+              eyebrow={meta.eyebrow}
+              title={meta.title}
+              collapsed={collapsed}
+              onToggle={onToggle}
+              defaultPos={pos}
+              isDragging={dragId === id}
+              onDragStart={handlers.onDragStart}
+              onDragEnd={handlers.onDragEnd}
             >
-              <DashPanel
-                id={id}
-                eyebrow={meta.eyebrow}
-                title={meta.title}
-                collapsed={collapsed}
-                onToggle={onToggle}
-                onDragStart={handlers.onDragStart}
-                onDragOver={handlers.onDragOver}
-                onDragEnd={handlers.onDragEnd}
-              >
-                {meta.node}
-              </DashPanel>
-            </div>
+              {meta.node}
+            </FloatingPanel>
           );
         })}
-        {ghost && (
-          <div
-            className="dash4-ghost"
-            style={{ left: ghost.x, top: ghost.y, width: ghost.w }}
-          >
-            moving…
-          </div>
-        )}
       </div>
     </main>
+  );
+}
+
+// --- Floating panel (free-drag, collapsible, transparent over map) ---
+function FloatingPanel({
+  id,
+  eyebrow,
+  title,
+  collapsed,
+  onToggle,
+  defaultPos,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+  children,
+}: {
+  id: string;
+  eyebrow?: string;
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  defaultPos: { x: number; y: number };
+  isDragging: boolean;
+  onDragStart: (id: string, rect: DOMRect) => void;
+  onDragEnd: () => void;
+  children: React.ReactNode;
+}) {
+  const [pos, setPos] = useState<{ x: number; y: number }>(defaultPos);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(`dash4:pos:${id}`);
+      if (raw) setPos(JSON.parse(raw));
+    } catch { /* ignore */ }
+    setHydrated(true);
+  }, [id]);
+
+  function handlePointerDown(e: React.PointerEvent<HTMLElement>) {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, select, textarea, a, [data-no-drag]')) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startPos = { ...pos };
+    onDragStart(id, (e.currentTarget as HTMLElement).getBoundingClientRect());
+
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      // Translate using the same anchor (positive = from-left/top, negative = from-right/bottom).
+      const next = {
+        x: startPos.x >= 0 ? startPos.x + dx : startPos.x + dx,
+        y: startPos.y >= 0 ? startPos.y + dy : startPos.y + dy,
+      };
+      // For panels anchored to right/bottom, dragging right/down should subtract.
+      if (startPos.x < 0) next.x = startPos.x - dx;
+      if (startPos.y < 0) next.y = startPos.y - dy;
+      setPos(next);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      onDragEnd();
+      try { window.localStorage.setItem(`dash4:pos:${id}`, JSON.stringify(pos)); } catch { /* ignore */ }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }
+
+  // Persist position when it changes.
+  useEffect(() => {
+    if (!hydrated) return;
+    try { window.localStorage.setItem(`dash4:pos:${id}`, JSON.stringify(pos)); } catch { /* ignore */ }
+  }, [pos, id, hydrated]);
+
+  const style: React.CSSProperties = {
+    left: pos.x >= 0 ? pos.x : 'auto',
+    right: pos.x < 0 ? -pos.x : 'auto',
+    top: pos.y >= 0 ? pos.y : 'auto',
+    bottom: pos.y < 0 ? -pos.y : 'auto',
+  };
+
+  return (
+    <section
+      className={`fpanel ${collapsed ? 'fpanel--collapsed' : ''} ${isDragging ? 'fpanel--dragging' : ''}`}
+      style={style}
+      data-panel-id={id}
+      role="region"
+      aria-label={title}
+    >
+      <header className="fpanel__head" onPointerDown={handlePointerDown}>
+        <div className="fpanel__title">
+          {eyebrow && <p className="eyebrow">{eyebrow}</p>}
+          <h2>{title}</h2>
+        </div>
+        <button
+          type="button"
+          className="fpanel__chev"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand' : 'Collapse'}
+          onClick={onToggle}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path
+              d="M3 5 L6 8 L9 5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ transformOrigin: 'center', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 220ms cubic-bezier(.2,.8,.2,1)' }}
+            />
+          </svg>
+        </button>
+      </header>
+      <div className="fpanel__body">
+        <div className="fpanel__body-inner">{children}</div>
+      </div>
+    </section>
   );
 }

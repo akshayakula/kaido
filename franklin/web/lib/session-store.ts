@@ -7,13 +7,26 @@ const ACTIVE_KEY = 'sessions:active';
 export const DEFAULT_SESSION_ID = 'default';
 const memory = new Map<string, { session: DemoSession; expiresAt: number }>();
 
-const redis =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN,
-      })
-    : null;
+function normalizeUpstashUrl(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  return `https://${trimmed}`;
+}
+
+const _upstashUrl = normalizeUpstashUrl(process.env.UPSTASH_REDIS_REST_URL);
+const _upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+let redis: Redis | null = null;
+if (_upstashUrl && _upstashToken) {
+  try {
+    redis = new Redis({ url: _upstashUrl, token: _upstashToken });
+  } catch (err) {
+    console.warn('[session-store] failed to init Upstash client; falling back to memory:', err);
+    redis = null;
+  }
+}
 
 export type SessionStoreHealth = {
   configured: boolean;

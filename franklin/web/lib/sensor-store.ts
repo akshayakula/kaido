@@ -16,13 +16,25 @@ import { Redis } from '@upstash/redis';
 
 let _redis: Redis | null = null;
 
+function normalizeUpstashUrl(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  return `https://${trimmed}`;
+}
+
 export function redis(): Redis | null {
   if (_redis) return _redis;
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return null;
-  _redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
-  });
+  const url = normalizeUpstashUrl(process.env.UPSTASH_REDIS_REST_URL);
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  try {
+    _redis = new Redis({ url, token });
+  } catch (err) {
+    console.warn('[sensor-store] failed to init Upstash client:', err);
+    return null;
+  }
   return _redis;
 }
 

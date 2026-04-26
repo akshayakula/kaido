@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { DemoSession } from '@/lib/types';
 import { summarizeKw } from '@/lib/simulation';
 
@@ -16,10 +16,10 @@ export function JoinPanel({
   const [copied, setCopied] = useState(false);
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [joinUrl, setJoinUrl] = useState('');
 
-  const joinUrl = useMemo(() => {
-    if (typeof window === 'undefined') return '';
-    return `${window.location.origin}/join`;
+  useEffect(() => {
+    setJoinUrl(`${window.location.origin}/join`);
   }, []);
 
   async function copy() {
