@@ -2761,14 +2761,7 @@ h2 {
    Floating panel chrome (drag handle + collapse)
    =========================================================== */
 .fp-card {
-  /* Make sure each panel can host its own absolute children but the
-     translate offset for drag still works. */
-  transition: transform 0.18s ease, max-height 0.18s ease, opacity 0.18s ease;
-}
-.fp-card.fp-dragging {
-  transition: none;
-  opacity: 0.92;
-  cursor: grabbing;
+  transition: max-height 0.18s ease, opacity 0.18s ease;
 }
 .fp-bar {
   position: sticky;
@@ -2778,16 +2771,15 @@ h2 {
   align-items: center;
   gap: 8px;
   padding: 4px 8px 4px 10px;
-  margin: 0 0 6px 0;          /* sit inside the card padding — no bleed */
+  margin: 0 0 6px 0;
   border-bottom: 1px solid var(--line);
   background: rgba(8, 9, 6, 0.55);
   backdrop-filter: blur(4px);
-  cursor: grab;
+  cursor: default;
   user-select: none;
   box-sizing: border-box;
   max-width: 100%;
 }
-.fp-card.fp-dragging .fp-bar { cursor: grabbing; }
 .fp-bar .fp-handle {
   flex: 1;
   font-size: 9px;
@@ -3047,5 +3039,37 @@ h2 {
   }
   .dashboard-screen .dashboard-hud > .lower-grid.diagnostics-bottom {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Fade the splash hero (h1 + tagline) out a few seconds after load
+   so the map + HUD are unobstructed. The eyebrow stays visible. */
+.dashboard-screen .hero-fade {
+  animation: hero-fade-out 6s ease-in-out 3.5s forwards;
+}
+.dashboard-screen .hero-fade:hover {
+  animation-play-state: paused;
+}
+@keyframes hero-fade-out {
+  0%   { opacity: 1; }
+  100% { opacity: 0; pointer-events: none; }
+}
+
+/* Slide the unified HUD up from the bottom on load */
+.dashboard-screen .dashboard-hud {
+  animation: hud-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.4s both;
+  transform-origin: bottom center;
+}
+@keyframes hud-rise {
+  0% {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
