@@ -180,14 +180,14 @@ export function GridMap({ session }: GridMapProps) {
         ],
       },
       center: [view.center.lng, view.center.lat],
-      zoom: 1.05,
+      zoom: 1.65,
       projection: { name: 'globe' },
       interactive: true,
       attributionControl: false,
       renderWorldCopies: false,
       dragRotate: true,
-      pitch: 10,
-      bearing: 0,
+      pitch: 18,
+      bearing: -18,
     });
 
     map.scrollZoom.disable();
@@ -215,7 +215,7 @@ export function GridMap({ session }: GridMapProps) {
       last = time;
       if (!interacting) {
         const centerNow = map.getCenter();
-        map.jumpTo({ center: [centerNow.lng + dt * 2.2, centerNow.lat] });
+        map.jumpTo({ center: [centerNow.lng + dt * 0.35, centerNow.lat] });
       }
       frame = window.requestAnimationFrame(spin);
     };
