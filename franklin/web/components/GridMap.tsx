@@ -586,7 +586,7 @@ function updateMapSources(map: mapboxgl.Map, view: GridView) {
       },
       properties: {
         color: node.color,
-        label: `${node.speaking ? '◉ ' : ''}DC ${node.index + 1}`,
+        label: `${node.speaking ? '◉ ' : ''}${node.dc.name}`,
       },
     })),
   });
