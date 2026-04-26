@@ -328,57 +328,110 @@ def _render_sparkles(buf, t, decay=0.25):
     _comet_state["sparkles"] = alive
 
 
-def render_comet(strip, temp_c, delta_c, mic_level, t):
-    """Δtemp-first ring renderer. See design notes at top of this section.
+def render_comet(strip, _unused, delta_c, mic_level, t):
+    """Δtemp-first ring renderer with a constant-state core glow at south
+    and a long, smooth comet trail orbiting the ring.
 
-    delta_c   — temp drift from baseline (°C). Drives spin direction, speed,
-                tail length, and color saturation.
-    temp_c    — absolute temp (°C). Picks the dim background tint.
+    The comet is *always* present:
+      - Stable (|Δ|<0.1 °C): a soft white head sits at north and gently
+        breathes, with a faint trail wrapping behind. The south anchor
+        glows soft white so the ring is never blank.
+      - Warming: comet head turns ember-red and orbits clockwise around
+        the ring, with a 4-8 LED smooth-fading tail. The south anchor
+        becomes an ember (orange-red), spread + brightness ∝ |Δ|.
+      - Cooling: same but counter-clockwise, blue head + icy-cyan anchor.
+      - Sign reversal triggers a 300 ms full-ring flash in the new color.
+
+    delta_c   — temp drift from baseline (°C). Drives spin direction,
+                speed, trail intensity, color, and the south anchor glow.
     mic_level — 0..1 microphone activity. Spawns brief white sparkles.
     t         — monotonic-ish seconds; must increase between calls.
+
+    The first parameter is kept for call-site compatibility but ignored
+    (absolute temp no longer affects the ring per design v3).
     """
+    del _unused
     s = _comet_state
     last_t = s["last_t"]
     dt = 0.0 if last_t is None else max(0.0, min(0.2, t - last_t))
     s["last_t"] = t
 
     # --- Δ sign reversal flash ---
-    new_sign = 0 if abs(delta_c) < 0.1 else (1 if delta_c > 0 else -1)
+    abs_d = abs(delta_c)
+    new_sign = 0 if abs_d < 0.1 else (1 if delta_c > 0 else -1)
     if new_sign != 0 and s["last_sign"] != 0 and new_sign != s["last_sign"]:
         s["flash_until"] = t + 0.30
         s["flash_color"] = _delta_to_color(delta_c)
     s["last_sign"] = new_sign
 
-    # --- accumulate comet position ---
-    speed = _delta_to_speed_turns_per_s(delta_c)             # turns/s
-    direction = 1.0 if delta_c >= 0 else -1.0                # CW vs CCW
-    s["angle"] = (s["angle"] + direction * speed * NUM_LEDS * dt) % NUM_LEDS
+    # --- comet head moves at speed ∝ |Δ|, even at zero (slow drift) ---
+    speed_turns_per_s = max(0.05, _delta_to_speed_turns_per_s(delta_c))
+    # Stable: gentle ambient drift; warming: CW; cooling: CCW.
+    direction = 1.0 if delta_c >= 0 else -1.0
+    if abs_d < 0.1:
+        # Park the head at north when stable so the operator has a fixed
+        # reference, but let the trail still gently sweep around.
+        speed_turns_per_s = 0.08
+        direction = 1.0
+    s["angle"] = (s["angle"] + direction * speed_turns_per_s * NUM_LEDS * dt) % NUM_LEDS
 
-    # --- background ring (dim, absolute-temp colored) ---
-    bg = _temp_band_color(temp_c)
-    bg_lvl = 0.12
-    buf = [(bg[0] * bg_lvl, bg[1] * bg_lvl, bg[2] * bg_lvl) for _ in range(NUM_LEDS)]
+    buf = [(0.0, 0.0, 0.0) for _ in range(NUM_LEDS)]
 
-    # --- comet head + trail ---
-    if speed <= 0:
-        # Stable: pulse a soft white "alive" indicator on the north LED.
-        breathe = 0.35 + 0.25 * math.sin(t * 1.5)
-        buf[NORTH_LED] = (breathe, breathe, breathe * 0.95)
+    # --- constant-state south anchor glow (always lit) ---
+    if abs_d < 0.1:
+        breathe = 0.40 + 0.18 * math.sin(t * 1.5)
+        anchor = (breathe, breathe, breathe * 0.95)
+        spread = 1
+    else:
+        mag = min(1.0, abs_d / 2.0)
+        peak = 0.55 + 0.45 * mag
+        if delta_c > 0:
+            anchor = (peak, peak * 0.30, peak * 0.05)        # ember
+        else:
+            anchor = (peak * 0.05, peak * 0.55, peak)        # icy
+        spread = 1 + int(round(mag * 3))
+    _add(buf, SOUTH_LED, *anchor)
+    for d in range(1, spread + 1):
+        falloff = (1.0 - d / (spread + 1)) ** 1.4
+        for side in (-1, +1):
+            led = (SOUTH_LED + side * d) % NUM_LEDS
+            _add(buf, led, anchor[0] * falloff * 0.55,
+                          anchor[1] * falloff * 0.55,
+                          anchor[2] * falloff * 0.55)
+
+    # --- comet head + long smooth trail ---
+    # Head color: white when stable, redder/bluer with magnitude.
+    if abs_d < 0.1:
+        head_color = (0.85, 0.85, 0.95)
     else:
         head_color = _delta_to_color(delta_c)
-        tail_len = _delta_to_tail_length(delta_c)
-        head_pos = s["angle"]
-        for i in range(tail_len):
-            # Position along the comet, head at i=0
-            pos = (head_pos - direction * i) % NUM_LEDS
-            led = int(pos) % NUM_LEDS
-            falloff = 1.0 - (i / max(1, tail_len))            # 1.0 head → ~0 tail
-            level = falloff ** 1.4                            # nonlinear punch on head
-            r, g, b = head_color
-            cr, cg, cb = buf[led]
-            buf[led] = (min(1.0, cr + r * level),
-                        min(1.0, cg + g * level),
-                        min(1.0, cb + b * level))
+    # Trail length: 3 LEDs minimum (so it always reads as a comet, not a dot),
+    # ramps to nearly the full ring at big Δ. Smooth exponential falloff per
+    # step so the trail looks like a fading streak rather than discrete dots.
+    base_len = 3
+    extra = int(round(min(NUM_LEDS - base_len, abs_d * 2.5)))
+    tail_len = base_len + extra
+    head_pos = s["angle"]
+    head_int = int(head_pos)
+    head_frac = head_pos - head_int
+    for i in range(tail_len + 1):
+        # i=0 is the head pixel; positive i goes opposite direction (trail behind).
+        pos_a = (head_int - int(direction) * i) % NUM_LEDS
+        pos_b = (head_int - int(direction) * i + int(direction)) % NUM_LEDS
+        # Smooth exponential fade — each tail step is ~62% of the previous.
+        # Strong head emphasis via the fractional anti-alias.
+        falloff = 0.62 ** i
+        # Boost the head; softer trail.
+        if i == 0:
+            falloff *= 1.0
+        elif i == 1:
+            falloff *= 0.85
+        # Anti-alias the head between two pixels for sub-LED smoothness.
+        a_lvl = falloff * (1.0 - head_frac if i == 0 else 1.0)
+        b_lvl = falloff * (head_frac if i == 0 else 0.0)
+        _add(buf, pos_a, head_color[0] * a_lvl, head_color[1] * a_lvl, head_color[2] * a_lvl)
+        if b_lvl > 0:
+            _add(buf, pos_b, head_color[0] * b_lvl, head_color[1] * b_lvl, head_color[2] * b_lvl)
 
     # --- mic sparkles ---
     _spawn_sparkles(mic_level, t, dt)
@@ -386,13 +439,10 @@ def render_comet(strip, temp_c, delta_c, mic_level, t):
 
     # --- Δ-sign reversal flash overlay ---
     if t < s["flash_until"]:
-        remaining = (s["flash_until"] - t) / 0.30           # 1 → 0
+        remaining = (s["flash_until"] - t) / 0.30
         fr, fg, fb = s["flash_color"]
         for i in range(NUM_LEDS):
-            cr, cg, cb = buf[i]
-            buf[i] = (min(1.0, cr + fr * remaining),
-                      min(1.0, cg + fg * remaining),
-                      min(1.0, cb + fb * remaining))
+            _add(buf, i, fr * remaining, fg * remaining, fb * remaining)
 
     for i, (r, g, b) in enumerate(buf):
         strip.setPixelColor(i, rgb(r, g, b))

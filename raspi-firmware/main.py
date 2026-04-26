@@ -53,7 +53,7 @@ STABLE_STDDEV_C    = float(os.environ.get("STABLE_STDDEV_C", "0.15"))
 #                  cooling rains them inward. Stable = breathing dot at north.
 #   "comet"      — Δtemp-dominant rotating comet with absolute-temp tint.
 #   "load_audio" — original 16-LED fill bar with mic flicker.
-RING_MODE          = os.environ.get("RING_MODE", "volcano")
+RING_MODE          = os.environ.get("RING_MODE", "comet")
 
 
 MOCK_BASELINE_C   = float(os.environ.get("MOCK_BASELINE_C", "23.0"))
