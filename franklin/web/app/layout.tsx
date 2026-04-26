@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'OpenDSS Data-Center Agent Demo',
-  description: 'Live grid-agent demo with data-center agents, Upstash session state, and mock OpenDSS.',
+  title: { default: 'Franklin · Grid sensor + audio fault detection', template: '%s · Franklin' },
+  description:
+    'Live transformer health from Pi sensors (temp, humidity, microphone) fused with SAM-Audio fault segmentation on a Lambda Cloud GPU. Two-way command channel from cloud to Pi.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

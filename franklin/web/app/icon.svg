@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- 16-LED Pi sensor ring. North LED (top) is the live indicator;
+       center dot is the sensor itself, glowing green when active. -->
+  <defs>
+    <radialGradient id="core" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"  stop-color="#34d399" stop-opacity="1"/>
+      <stop offset="60%" stop-color="#34d399" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="north" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"  stop-color="#34d399" stop-opacity="1"/>
+      <stop offset="80%" stop-color="#34d399" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- Soft outer halo -->
+  <circle cx="32" cy="32" r="30" fill="url(#core)" opacity="0.18"/>
+  <!-- 16-LED ring: 15 muted, 1 (north) bright green -->
+  <g fill="#d8dec0">
+    <!-- Generated positions: r=22, center 32,32, 16 dots -->
+    <!-- north (index 0) -->
+    <circle cx="32"    cy="10"    r="3.4" fill="url(#north)"/>
+    <circle cx="40.42" cy="11.69" r="2.2" opacity="0.55"/>
+    <circle cx="47.56" cy="16.44" r="2.2" opacity="0.55"/>
+    <circle cx="52.31" cy="23.58" r="2.2" opacity="0.55"/>
+    <circle cx="54"    cy="32"    r="2.2" opacity="0.55"/>
+    <circle cx="52.31" cy="40.42" r="2.2" opacity="0.55"/>
+    <circle cx="47.56" cy="47.56" r="2.2" opacity="0.55"/>
+    <circle cx="40.42" cy="52.31" r="2.2" opacity="0.55"/>
+    <circle cx="32"    cy="54"    r="2.2" opacity="0.55"/>
+    <circle cx="23.58" cy="52.31" r="2.2" opacity="0.55"/>
+    <circle cx="16.44" cy="47.56" r="2.2" opacity="0.55"/>
+    <circle cx="11.69" cy="40.42" r="2.2" opacity="0.55"/>
+    <circle cx="10"    cy="32"    r="2.2" opacity="0.55"/>
+    <circle cx="11.69" cy="23.58" r="2.2" opacity="0.55"/>
+    <circle cx="16.44" cy="16.44" r="2.2" opacity="0.55"/>
+    <circle cx="23.58" cy="11.69" r="2.2" opacity="0.55"/>
+  </g>
+  <!-- Central sensor core -->
+  <circle cx="32" cy="32" r="6" fill="url(#core)"/>
+  <circle cx="32" cy="32" r="2.2" fill="#34d399"/>
+</svg>

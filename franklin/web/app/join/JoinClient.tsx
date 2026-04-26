@@ -73,7 +73,6 @@ export function JoinClient() {
           <span>Display name</span>
           <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Data Center 07" />
         </label>
-        {selected && <div className="selected-session">Default grid is {selected.health}; {selected.participantCount} data centers connected.</div>}
         {error && <div className="form-error" role="alert">{error}</div>}
         <button onClick={join} disabled={busy}>{busy ? 'Joining...' : 'Become a data-center agent'}</button>
         <a className="secondary-link" href="/dashboard">Open dashboard</a>
