@@ -17,3 +17,6 @@ franklin/.venv/
 test-results/
 playwright-report/
 tsconfig.tsbuildinfo
+
+# Local Netlify folder
+.netlify

@@ -26,9 +26,10 @@ const fallbackByTrigger: Record<Trigger['kind'], string> = {
 };
 
 export async function addOpenAINegotiationEvent(session: DemoSession, trigger: Trigger) {
-  const apiKey = process.env.NVIDIA_NIM_API_KEY;
+  // Prefer OpenAI; fall back to legacy NVIDIA NIM if that's all that's set.
+  const apiKey = process.env.OPENAI_API_KEY || process.env.NVIDIA_NIM_API_KEY;
   if (!apiKey) {
-    appendAgentEvent(session, 'ai-agent', 'demo', 'AI_DISABLED', 'NVIDIA NIM key is not configured; using deterministic negotiation messages.');
+    appendAgentEvent(session, 'ai-agent', 'demo', 'AI_DISABLED', 'OPENAI_API_KEY is not configured; using deterministic negotiation messages.');
     return;
   }
 
@@ -37,7 +38,7 @@ export async function addOpenAINegotiationEvent(session: DemoSession, trigger: T
     appendAgentEvent(session, aiFrom(trigger), aiTo(trigger), 'AI_NEGOTIATION', text);
   } catch (error) {
     appendAgentEvent(session, 'ai-agent', 'demo', 'AI_FALLBACK', fallbackByTrigger[trigger.kind]);
-    console.warn('[nvidia nim negotiation failed]', error);
+    console.warn('[ai negotiation failed]', error);
   }
 }
 
@@ -61,8 +62,17 @@ function aiTo(trigger: Trigger) {
 }
 
 async function generateNegotiationText(session: DemoSession, trigger: Trigger, apiKey: string) {
-  const model = process.env.NVIDIA_NIM_MODEL || 'mistralai/mistral-nemotron';
-  const baseUrl = process.env.NVIDIA_NIM_BASE_URL || 'https://integrate.api.nvidia.com/v1';
+  // Use OpenAI by default. NVIDIA NIM kept as a back-compat path for
+  // anyone still running with NVIDIA_NIM_* env vars.
+  const usingNvidia = !process.env.OPENAI_API_KEY && !!process.env.NVIDIA_NIM_API_KEY;
+  const model =
+    process.env.OPENAI_MODEL ||
+    process.env.NVIDIA_NIM_MODEL ||
+    (usingNvidia ? 'mistralai/mistral-nemotron' : 'gpt-4o-mini');
+  const baseUrl =
+    process.env.OPENAI_BASE_URL ||
+    process.env.NVIDIA_NIM_BASE_URL ||
+    (usingNvidia ? 'https://integrate.api.nvidia.com/v1' : 'https://api.openai.com/v1');
   const datacenters = session.datacenters.map((dc) => ({
     name: dc.name,
     queueDepth: dc.queueDepth,
@@ -122,7 +132,7 @@ async function generateNegotiationText(session: DemoSession, trigger: Trigger, a
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`NVIDIA NIM ${response.status}: ${body.slice(0, 500)}`);
+    throw new Error(`AI provider ${response.status}: ${body.slice(0, 500)}`);
   }
 
   const json = (await response.json()) as OpenAIResponse;

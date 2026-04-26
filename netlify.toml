@@ -1,0 +1,12 @@
+# Netlify build config for the kaido monorepo.
+# The deployable Next.js app lives in franklin/web/.
+[build]
+  base = "franklin/web"
+  command = "npm install && npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NODE_VERSION = "20"
