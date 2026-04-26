@@ -21,6 +21,8 @@ type GridView = {
     color: string;
     queuePressure: number;
     queueLabel: string;
+    speaking: boolean;
+    path: [number, number][];
     index: number;
     lat: number;
     lng: number;
@@ -48,11 +50,19 @@ const POPULATED_LIGHTS: [number, number][] = [
 
 export function GridMap({ session }: GridMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const pulseRefs = useRef(new Map<string, HTMLElement>());
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const viewRef = useRef<GridView | null>(null);
 
   const view = useMemo(() => {
     if (!session) return null;
     const center = { lat: session.site.lat, lng: session.site.lng };
+    const recentTalkingActors = new Set(
+      session.events
+        .slice(0, 20)
+        .filter((event) => event.type !== 'POWER_FLOW_RESULT')
+        .flatMap((event) => [event.from, event.to])
+    );
     const drawValues = session.datacenters.map((dc) => {
       const gpuDraw = dc.slurm?.allocatedGpus ?? Math.round(dc.actualUtilization * dc.gpuCount);
       return Math.max(dc.actualUtilization, gpuDraw / Math.max(1, dc.gpuCount));
@@ -63,6 +73,8 @@ export function GridMap({ session }: GridMapProps) {
       const relativeDraw = draw / maxDraw;
       const drawClass: DrawClass = relativeDraw > 0.72 ? 'high' : relativeDraw > 0.38 ? 'medium' : 'low';
       const queuePressure = Math.min(1, (dc.queueDepth + (dc.slurm?.pendingJobs ?? 0) * 45 + (dc.slurm?.heldJobs ?? 0) * 70) / 1800);
+      const lat = center.lat + (dc.lat - center.lat) * 18;
+      const lng = center.lng + (dc.lng - center.lng) * 18;
       return {
         dc,
         draw,
@@ -72,13 +84,19 @@ export function GridMap({ session }: GridMapProps) {
         color: COLORS[drawClass],
         queuePressure,
         queueLabel: queuePressure > 0.68 ? 'deep queue' : queuePressure > 0.34 ? 'active queue' : 'short queue',
+        speaking: recentTalkingActors.has(dc.name),
         index,
-        lat: center.lat + (dc.lat - center.lat) * 18,
-        lng: center.lng + (dc.lng - center.lng) * 18,
+        lat,
+        lng,
+        path: arcCoordinates([center.lng, center.lat], [lng, lat]),
       };
     });
     return { center, nodes };
   }, [session]);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
 
   useEffect(() => {
     if (!containerRef.current || !session || !view || mapRef.current || !MAPBOX_TOKEN) return;
@@ -217,6 +235,7 @@ export function GridMap({ session }: GridMapProps) {
         const centerNow = map.getCenter();
         map.jumpTo({ center: [centerNow.lng + dt * 0.35, centerNow.lat] });
       }
+      updatePowerPulses(map, viewRef.current, pulseRefs.current, time);
       frame = window.requestAnimationFrame(spin);
     };
     frame = window.requestAnimationFrame(spin);
@@ -248,6 +267,7 @@ export function GridMap({ session }: GridMapProps) {
     return () => {
       if (resumeTimer != null) window.clearTimeout(resumeTimer);
       window.cancelAnimationFrame(frame);
+      pulseRefs.current.clear();
       map.remove();
       mapRef.current = null;
     };
@@ -272,6 +292,19 @@ export function GridMap({ session }: GridMapProps) {
   return (
     <div className="franklin-globe-grid mapbox-globe-grid" data-health={session.grid.health}>
       <div className="mapbox-globe-canvas" ref={containerRef} aria-label="Mapbox globe with data-center cylinders" />
+      <div className="flow-pulse-layer" aria-hidden="true">
+        {view.nodes.map((node) => (
+          <i
+            className={`flow-pulse ${node.drawClass}`}
+            data-speaking={node.speaking ? 'true' : 'false'}
+            key={node.dc.id}
+            ref={(element) => {
+              if (element) pulseRefs.current.set(node.dc.id, element);
+              else pulseRefs.current.delete(node.dc.id);
+            }}
+          />
+        ))}
+      </div>
       <div className="site-card franklin-site-card">
         <span>Grid agent</span>
         <b>{systemTone}</b>
@@ -281,9 +314,9 @@ export function GridMap({ session }: GridMapProps) {
         <div className="readout-title">Cylinder live read</div>
         {view.nodes.map((node) => (
           <div className={`readout-row ${node.drawClass}`} key={node.dc.id}>
-            <b>DC {node.index + 1}</b>
+            <b>DC {node.index + 1}{node.speaking ? ' ◉' : ''}</b>
             <span>{node.dc.name}</span>
-            <small>{node.queueLabel} · {node.dc.queueDepth} queued · {node.dc.slurm?.pendingJobs ?? 0} pending · {Math.round(node.draw * 100)}% draw</small>
+            <small>{node.speaking ? 'talking · ' : ''}{node.queueLabel} · {node.dc.queueDepth} queued · {node.dc.slurm?.pendingJobs ?? 0} pending · {Math.round(node.draw * 100)}% draw</small>
           </div>
         ))}
       </div>
@@ -291,8 +324,9 @@ export function GridMap({ session }: GridMapProps) {
         <span><i className="legend-dot low" /> light draw</span>
         <span><i className="legend-dot medium" /> rising draw</span>
         <span><i className="legend-dot high" /> heavy draw</span>
+        <span><i className="legend-dot talking" /> talking</span>
       </div>
-      <div className="map-note">Cylinder height follows GPU queue pressure; arc weight follows relative draw.</div>
+      <div className="map-note">Moving pulses show live load reallocation; ◉ marks recently talking agents.</div>
     </div>
   );
 }
@@ -320,7 +354,7 @@ function updateMapSources(map: mapboxgl.Map, view: GridView) {
       type: 'Feature',
       geometry: {
         type: 'LineString',
-        coordinates: arcCoordinates([view.center.lng, view.center.lat], [node.lng, node.lat]),
+        coordinates: node.path,
       },
       properties: { color: node.color, draw: node.relativeDraw },
     })),
@@ -349,10 +383,37 @@ function updateMapSources(map: mapboxgl.Map, view: GridView) {
       },
       properties: {
         color: node.color,
-        label: `DC ${node.index + 1}`,
+        label: `${node.speaking ? '◉ ' : ''}DC ${node.index + 1}`,
       },
     })),
   });
+}
+
+function updatePowerPulses(map: mapboxgl.Map, view: GridView | null, elements: Map<string, HTMLElement>, time: number) {
+  if (!view?.nodes.length) return;
+  view.nodes.forEach((node) => {
+    const element = elements.get(node.dc.id);
+    if (!element) return;
+    const speed = 0.18 + node.relativeDraw * 0.42;
+    const phase = (time / 1000 * speed + node.index * 0.19) % 1;
+    const point = samplePath(node.path, phase);
+    const projected = map.project(point);
+    element.style.setProperty('--flow-scale', String(0.82 + node.relativeDraw * 0.72));
+    element.style.transform = `translate3d(${projected.x}px, ${projected.y}px, 0) translate(-50%, -50%) scale(var(--flow-scale))`;
+  });
+}
+
+function samplePath(path: [number, number][], phase: number) {
+  if (path.length < 2) return path[0] ?? [0, 0];
+  const exact = phase * (path.length - 1);
+  const index = Math.min(path.length - 2, Math.floor(exact));
+  const local = exact - index;
+  const from = path[index];
+  const to = path[index + 1];
+  return [
+    from[0] + (to[0] - from[0]) * local,
+    from[1] + (to[1] - from[1]) * local,
+  ] as [number, number];
 }
 
 function setSource(map: mapboxgl.Map, id: string, data: FeatureCollection<Geometry, GeoJsonProperties>) {
