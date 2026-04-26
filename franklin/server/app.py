@@ -206,6 +206,24 @@ def run_job():
     return jsonify({"jobId": job_id})
 
 
+@app.route("/api/sources/<name>", methods=["DELETE"])
+def delete_source(name: str):
+    name = _safe_name(name)
+    local = WORK / name
+    if not local.exists():
+        abort(404, f"source {name} not found")
+    shutil.rmtree(local)
+    # best-effort remote cleanup
+    try:
+        subprocess.run(
+            ["ssh", *SSH_OPTS, LAMBDA_HOST,
+             f"rm -rf ~/franklin/inputs/{name}.* ~/franklin/jobs/{name}"],
+            check=False, capture_output=True, text=True, timeout=30)
+    except Exception:
+        pass
+    return jsonify({"deleted": name})
+
+
 @app.route("/api/jobs/<jid>")
 def job_status(jid: str):
     j = jobs.get(jid)

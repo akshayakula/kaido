@@ -55,6 +55,11 @@
     font: inherit; font-weight: 600; cursor: pointer; border-radius: 4px;
   }
   .run-bar button:disabled { opacity: .4; cursor: not-allowed; }
+  .run-bar button.ghost {
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+    font-weight: 400;
+  }
+  .run-bar button.ghost:hover { color: var(--fault); border-color: var(--fault); }
   .run-bar select { background: var(--panel); color: var(--fg); border: 1px solid var(--border);
     padding: 6px 8px; font: inherit; border-radius: 4px; }
   .progress-drawer {
@@ -161,7 +166,8 @@
       <option value="facebook/sam-audio-base">base</option>
       <option value="facebook/sam-audio-large">large</option>
     </select>
-    <button id="run-btn">▶ run all 23</button>
+    <button id="run-btn">▶ run popping</button>
+    <button id="clear-btn" class="ghost" title="delete current source (local + remote)">× clear</button>
   </div>
   <nav id="prompts"></nav>
 </aside>
@@ -231,6 +237,8 @@ const FAULTS = [
   ["speech",               "ambient_subtract",         "Ambient (subtract)"],
 ];
 const ALL_PROMPTS = [...HEALTH.map(r => r[0]), ...FAULTS.map(r => r[0])];
+// What we actually run by default — the popping/impulsive signatures.
+const RUN_PROMPTS = ["popping"];
 const safe = p => p.replace(/ /g, "_").replace(/\//g, "-");
 const fmt = s => `${Math.floor(s/60)}:${(s%60).toFixed(1).padStart(4,"0")}`;
 
@@ -409,7 +417,7 @@ async function loadSources(preferred){
   for (const s of sources){
     const targetCount = s.files.filter(f => f.startsWith("target__")).length;
     const el = document.createElement("div"); el.className = "src-item"; el.dataset.src = s.name;
-    el.innerHTML = `<span>${s.name}</span><span class="count">${targetCount}/23</span>`;
+    el.innerHTML = `<span>${s.name}</span><span class="count">${targetCount} files</span>`;
     el.addEventListener("click", () => selectSource(s.name));
     root.appendChild(el);
   }
@@ -448,7 +456,7 @@ document.getElementById("run-btn").addEventListener("click", async () => {
   const model = document.getElementById("model-select").value;
   const r = await fetch("/api/run", {
     method: "POST", headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ name: curSource, prompts: ALL_PROMPTS, model }),
+    body: JSON.stringify({ name: curSource, prompts: RUN_PROMPTS, model }),
   });
   if (!r.ok){ alert("run failed: " + await r.text()); return; }
   const { jobId } = await r.json();
@@ -485,6 +493,17 @@ function watchJob(jobId){
 
 document.getElementById("progress-close").addEventListener("click", () => {
   document.getElementById("progress").classList.remove("open");
+});
+
+document.getElementById("clear-btn").addEventListener("click", async () => {
+  if (!curSource){ return; }
+  if (!confirm(`Delete source "${curSource}" and all its files?`)) return;
+  const r = await fetch(`/api/sources/${encodeURIComponent(curSource)}`, { method: "DELETE" });
+  if (!r.ok){ alert("delete failed: " + await r.text()); return; }
+  curSource = null;
+  destroyLanes();
+  buildStack();
+  await loadSources();
 });
 document.getElementById("play-input").addEventListener("click", () => solo("input"));
 document.getElementById("play-target").addEventListener("click", () => solo("target"));

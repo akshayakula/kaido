@@ -50,6 +50,10 @@ FAULTS = [
 # Convenience: all prompts as a flat list of strings.
 ALL_PROMPTS = [p for p, _ in HEALTH] + [p for p, _ in FAULTS]
 
+# What we actually run by default for transformer health monitoring:
+# the impulsive/popping signatures of partial discharge & arcing.
+POPPING_PROMPTS = ["popping"]
+
 
 def prompts_for(category: str) -> list[str]:
     """Return prompts for a category like 'partial_discharge' or 'arcing'."""
