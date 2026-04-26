@@ -35,6 +35,25 @@ export type GridState = {
   solver?: 'opendss' | 'approximate';
   feederKw?: number;
   transformerLoading?: number;
+  lineLoadings?: GridLineLoading[];
+  datacenterLoads?: GridDataCenterLoad[];
+};
+
+export type GridLineLoading = {
+  name: string;
+  loading: number;
+  amps: number;
+};
+
+export type GridDataCenterLoad = {
+  id?: string;
+  name: string;
+  bus: string;
+  kw: number;
+  kvar: number;
+  line: string;
+  lineLoading?: number;
+  lineAmps?: number;
 };
 
 export type SlurmScheduler = {

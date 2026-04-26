@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { applyManualOverride } from '@/lib/simulation';
+import { appendPowerFlowResult, applyManualOverride } from '@/lib/simulation';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
 import { updateSession } from '@/lib/session-store';
 
@@ -29,7 +29,10 @@ export async function POST(
         instruction: body.instruction?.trim().slice(0, 240),
       })
     );
-    if (found) draft.grid = await solveWithOpenDss(draft, draft.grid);
+    if (found) {
+      draft.grid = await solveWithOpenDss(draft, draft.grid);
+      appendPowerFlowResult(draft);
+    }
   });
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   if (!found) return NextResponse.json({ error: 'Data center not found' }, { status: 404 });

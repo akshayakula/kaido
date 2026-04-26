@@ -171,13 +171,24 @@ export function tickSession(session: DemoSession) {
   session.grid = firstSolve;
   applyGridAgentNegotiation(session);
   session.grid = solveGridStep(session);
+  touch(session);
+}
 
+export function appendPowerFlowResult(session: DemoSession) {
+  const source = session.grid.solver === 'opendss' ? 'opendss' : 'grid-estimator';
+  const feeder = typeof session.grid.feederKw === 'number' ? `, feeder ${Math.round(session.grid.feederKw)} kW` : '';
+  const transformer =
+    typeof session.grid.transformerLoading === 'number'
+      ? `, transformer ${Math.round(session.grid.transformerLoading * 100)}%`
+      : '';
   addEvent(
     session,
-    'opendss',
+    source,
     'grid-agent',
     'POWER_FLOW_RESULT',
-    `Voltage ${session.grid.voltageMin.toFixed(3)} pu, loading ${Math.round(session.grid.lineLoadingMax * 100)}%, reserve ${Math.round(session.grid.reserveKw)} kW.`
+    `Solved ${session.datacenters.length} data centers: voltage ${session.grid.voltageMin.toFixed(3)} pu, line loading ${Math.round(
+      session.grid.lineLoadingMax * 100
+    )}%, reserve ${Math.round(session.grid.reserveKw)} kW${feeder}${transformer}.`
   );
   touch(session);
 }

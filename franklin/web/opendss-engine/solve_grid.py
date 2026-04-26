@@ -65,6 +65,7 @@ def run(payload: Dict[str, Any]) -> Dict[str, Any]:
     dss("New Line.Backbone bus1=subbus bus2=bus0 phases=3 linecode=Feeder length=0.35 units=km")
 
     feeder_kw = 0.0
+    datacenter_loads: List[Dict[str, Any]] = []
     for idx, dc in enumerate(datacenters, start=1):
         bus = f"dc{idx}bus"
         length_km = 0.45 + (idx % 4) * 0.18
@@ -74,6 +75,14 @@ def run(payload: Dict[str, Any]) -> Dict[str, Any]:
         kvar = kw * 0.33
         feeder_kw += kw
         dss(f"New Load.Load{idx} bus1={bus} phases=3 conn=wye kv=12.47 kw={kw:.3f} kvar={kvar:.3f} model=1")
+        datacenter_loads.append({
+            "id": dc.get("id"),
+            "name": dc.get("name") or f"Data Center {idx:02d}",
+            "bus": bus,
+            "kw": kw,
+            "kvar": kvar,
+            "line": line_name.lower(),
+        })
 
     # Add a small station service load so no-data-center sessions still solve.
     if not datacenters:
@@ -101,6 +110,13 @@ def run(payload: Dict[str, Any]) -> Dict[str, Any]:
         loading = max_current / max(normamps, 1.0)
         max_line_loading = max(max_line_loading, loading)
         line_loadings.append({"name": name, "loading": loading, "amps": max_current})
+
+    line_by_name = {item["name"].lower(): item for item in line_loadings}
+    for load in datacenter_loads:
+        line = line_by_name.get(str(load["line"]).lower())
+        if line:
+            load["lineLoading"] = line["loading"]
+            load["lineAmps"] = line["amps"]
 
     losses_kw = float(dss.Circuit.Losses()[0]) / 1000.0
     transformer_loading = feeder_kw / max(float(config["substation_kva"]) * 0.92, 1.0)
@@ -134,8 +150,11 @@ def run(payload: Dict[str, Any]) -> Dict[str, Any]:
             "solver": "opendss",
             "feederKw": feeder_kw,
             "transformerLoading": transformer_loading,
+            "lineLoadings": line_loadings,
+            "datacenterLoads": datacenter_loads,
         },
         "lineLoadings": line_loadings,
+        "datacenterLoads": datacenter_loads,
     }
 
 

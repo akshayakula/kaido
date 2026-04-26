@@ -1478,7 +1478,7 @@ h2 {
 
 .readout-status-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -1510,6 +1510,73 @@ h2 {
 
 .readouts-console {
   min-height: 68vh;
+}
+
+.opendss-physics-panel {
+  margin-bottom: 16px;
+}
+
+.physics-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 12px;
+}
+
+.physics-table {
+  display: grid;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid rgba(228, 226, 201, 0.12);
+}
+
+.physics-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.5fr) minmax(70px, 0.6fr) minmax(94px, 0.7fr) minmax(100px, 0.8fr);
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(228, 226, 201, 0.09);
+  color: rgba(228, 226, 201, 0.78);
+  font-size: 11px;
+}
+
+.physics-row:last-child {
+  border-bottom: 0;
+}
+
+.physics-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #202017;
+  color: var(--text);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.line-loading-list {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.line-loading-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border: 1px solid rgba(228, 226, 201, 0.12);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.line-loading-row b {
+  color: var(--text);
+}
+
+.line-loading-row small {
+  color: var(--muted);
 }
 
 .readouts-toolbar {
@@ -1629,9 +1696,10 @@ h2 {
     grid-template-columns: 1fr;
   }
 
-  .readout-status-grid,
   .readouts-toolbar,
-  .json-grid {
+  .json-grid,
+  .physics-grid,
+  .physics-row {
     grid-template-columns: 1fr;
   }
 

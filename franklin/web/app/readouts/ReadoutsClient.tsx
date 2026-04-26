@@ -78,10 +78,14 @@ export function ReadoutsClient() {
       <section className="readout-status-grid">
         <ReadoutStat label="Session" value={session?.id ?? 'loading'} detail={session ? `${session.datacenters.length} data centers` : 'polling'} />
         <ReadoutStat label="Grid" value={session?.grid.health ?? 'waiting'} detail={session?.grid.solver ?? 'readout pending'} />
+        <ReadoutStat label="Feeder" value={formatKw(session?.grid.feederKw)} detail="OpenDSS total load" />
+        <ReadoutStat label="Transformer" value={formatRatio(session?.grid.transformerLoading)} detail="solved loading" />
         <ReadoutStat label="Events" value={String(session?.events.length ?? 0)} detail={latestAi ? latestAi.type : 'no AI turn yet'} />
         <ReadoutStat label="Store" value={storeHealthLabel(storeHealth)} detail={storeHealth?.host ?? 'server-side only'} />
         <ReadoutStat label="Updated" value={lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'waiting'} detail="1s polling" />
       </section>
+
+      <GridPhysicsReadout session={session} />
 
       <section className="panel readouts-console">
         <div className="readouts-toolbar">
@@ -103,6 +107,53 @@ export function ReadoutsClient() {
         {mode === 'json' && <JsonReadout session={session} storeHealth={storeHealth} />}
       </section>
     </main>
+  );
+}
+
+function GridPhysicsReadout({ session }: { session: DemoSession | null }) {
+  const loads = session?.grid.datacenterLoads ?? [];
+  const lines = session?.grid.lineLoadings ?? [];
+
+  return (
+    <section className="panel opendss-physics-panel">
+      <div className="panel-head compact">
+        <div>
+          <p className="eyebrow">OpenDSS solved circuit</p>
+          <h2>Load changes by joined data center</h2>
+        </div>
+        <span className="solver-badge">{session?.grid.solver === 'opendss' ? 'Live OpenDSS' : 'Approx fallback'}</span>
+      </div>
+
+      <div className="physics-grid">
+        <div className="physics-table">
+          <div className="physics-row physics-head">
+            <span>Data center</span>
+            <span>Bus</span>
+            <span>Load</span>
+            <span>Branch</span>
+          </div>
+          {loads.length ? loads.map((load) => (
+            <div className="physics-row" key={`${load.id ?? load.name}-${load.bus}`}>
+              <span>{load.name}</span>
+              <span>{load.bus}</span>
+              <span>{Math.round(load.kw).toLocaleString()} kW</span>
+              <span>{load.lineLoading === undefined ? load.line : `${load.line} · ${Math.round(load.lineLoading * 100)}%`}</span>
+            </div>
+          )) : <div className="empty">Waiting for a solved data-center load.</div>}
+        </div>
+
+        <div className="line-loading-list">
+          <p className="eyebrow">Feeder branches</p>
+          {lines.slice(0, 8).map((line) => (
+            <div className="line-loading-row" key={line.name}>
+              <span>{line.name}</span>
+              <b>{Math.round(line.loading * 100)}%</b>
+              <small>{line.amps.toFixed(1)} A</small>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -184,4 +235,12 @@ function storeHealthLabel(health: StoreHealth | null) {
   if (health.mode === 'memory-fallback') return 'Redis fallback';
   if (!health.configured) return 'memory only';
   return health.ok ? health.mode : 'store error';
+}
+
+function formatKw(value: number | undefined) {
+  return typeof value === 'number' ? `${Math.round(value).toLocaleString()} kW` : 'waiting';
+}
+
+function formatRatio(value: number | undefined) {
+  return typeof value === 'number' ? `${Math.round(value * 100)}%` : 'waiting';
 }
