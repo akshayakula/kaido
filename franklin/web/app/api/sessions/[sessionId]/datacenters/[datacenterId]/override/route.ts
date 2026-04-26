@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { appendPowerFlowResult, applyGridAgentAllocation, applyManualOverride } from '@/lib/simulation';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
-import { updateSession } from '@/lib/session-store';
+import { commitSession, getSession } from '@/lib/session-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,22 +20,26 @@ export async function POST(
     return NextResponse.json({ error: 'Override requires schedulerCap or batterySupportKw' }, { status: 400 });
   }
 
-  let found = false;
-  const session = await updateSession(params.sessionId, async (draft) => {
-    found = Boolean(
-      applyManualOverride(draft, params.datacenterId, {
-        schedulerCap: body.schedulerCap,
-        batterySupportKw: body.batterySupportKw,
-        instruction: body.instruction?.trim().slice(0, 240),
-      })
-    );
-    if (found) {
-      applyGridAgentAllocation(draft);
-      draft.grid = await solveWithOpenDss(draft, draft.grid);
-      appendPowerFlowResult(draft);
-    }
-  });
+  const session = await getSession(params.sessionId);
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+
+  const eventsBefore = session.events.length;
+  const found = Boolean(applyManualOverride(session, params.datacenterId, {
+    schedulerCap: body.schedulerCap,
+    batterySupportKw: body.batterySupportKw,
+    instruction: body.instruction?.trim().slice(0, 240),
+  }));
   if (!found) return NextResponse.json({ error: 'Data center not found' }, { status: 404 });
+
+  applyGridAgentAllocation(session);
+  session.grid = await solveWithOpenDss(session, session.grid);
+  appendPowerFlowResult(session);
+
+  await commitSession(params.sessionId, session, {
+    meta: true,
+    grid: true,
+    dcIdsToWrite: session.datacenters.map((dc) => dc.id),
+    eventsToAppend: session.events.slice(eventsBefore),
+  });
   return NextResponse.json({ session });
 }

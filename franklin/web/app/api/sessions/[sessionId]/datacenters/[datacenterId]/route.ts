@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { addEvent, appendPowerFlowResult, applyGridAgentAllocation } from '@/lib/simulation';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
-import { updateSession } from '@/lib/session-store';
+import { commitSession, getSession, removeDc } from '@/lib/session-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,24 +9,28 @@ export async function DELETE(
   _request: Request,
   { params }: { params: { sessionId: string; datacenterId: string } }
 ) {
-  let removedName: string | null = null;
-  const session = await updateSession(params.sessionId, async (draft) => {
-    const idx = draft.datacenters.findIndex((dc) => dc.id === params.datacenterId);
-    if (idx === -1) return;
-    removedName = draft.datacenters[idx].name;
-    draft.datacenters.splice(idx, 1);
-    addEvent(
-      draft,
-      'operator',
-      'grid-agent',
-      'MANUAL_OVERRIDE',
-      `Removed ${removedName} from the grid (operator action).`
-    );
-    applyGridAgentAllocation(draft);
-    draft.grid = await solveWithOpenDss(draft, draft.grid);
-    appendPowerFlowResult(draft);
-  });
+  const session = await getSession(params.sessionId);
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
-  if (!removedName) return NextResponse.json({ error: 'Data center not found' }, { status: 404 });
+  const idx = session.datacenters.findIndex((dc) => dc.id === params.datacenterId);
+  if (idx === -1) return NextResponse.json({ error: 'Data center not found' }, { status: 404 });
+
+  const removedName = session.datacenters[idx].name;
+  const eventsBefore = session.events.length;
+
+  // Drop from Upstash hash FIRST so a racing tick that reads after this point won't see the DC.
+  await removeDc(params.sessionId, params.datacenterId);
+
+  session.datacenters.splice(idx, 1);
+  addEvent(session, 'operator', 'grid-agent', 'MANUAL_OVERRIDE', `Removed ${removedName} from the grid (operator action).`);
+  applyGridAgentAllocation(session);
+  session.grid = await solveWithOpenDss(session, session.grid);
+  appendPowerFlowResult(session);
+
+  await commitSession(params.sessionId, session, {
+    meta: true,
+    grid: true,
+    dcIdsToWrite: session.datacenters.map((dc) => dc.id),
+    eventsToAppend: session.events.slice(eventsBefore),
+  });
   return NextResponse.json({ session, removed: removedName });
 }

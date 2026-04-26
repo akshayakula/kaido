@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { appendPowerFlowResult, applyGridAgentAllocation, applyInferenceRequest } from '@/lib/simulation';
 import { addOpenAINegotiationEvent } from '@/lib/openai-agent';
 import { solveWithOpenDss } from '@/lib/opendss/runner';
-import { updateSession } from '@/lib/session-store';
-import type { DataCenterAgent } from '@/lib/types';
+import { commitSession, getSession } from '@/lib/session-store';
 import type { RequestType } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -24,21 +23,22 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid request type' }, { status: 400 });
   }
 
-  let datacenter: DataCenterAgent | null = null;
-  const session = await updateSession(params.sessionId, async (draft) => {
-    datacenter = applyInferenceRequest(draft, params.datacenterId, body.requestType!);
-    if (datacenter) {
-      applyGridAgentAllocation(draft);
-      draft.grid = await solveWithOpenDss(draft, draft.grid);
-      appendPowerFlowResult(draft);
-      await addOpenAINegotiationEvent(draft, {
-        kind: 'inference_request',
-        datacenter,
-        requestType: body.requestType!,
-      });
-    }
-  });
+  const session = await getSession(params.sessionId);
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+  const eventsBefore = session.events.length;
+
+  const datacenter = applyInferenceRequest(session, params.datacenterId, body.requestType);
   if (!datacenter) return NextResponse.json({ error: 'Data center not found' }, { status: 404 });
+  applyGridAgentAllocation(session);
+  session.grid = await solveWithOpenDss(session, session.grid);
+  appendPowerFlowResult(session);
+  await addOpenAINegotiationEvent(session, { kind: 'inference_request', datacenter, requestType: body.requestType });
+
+  await commitSession(params.sessionId, session, {
+    meta: true,
+    grid: true,
+    dcIdsToWrite: session.datacenters.map((dc) => dc.id),
+    eventsToAppend: session.events.slice(eventsBefore),
+  });
   return NextResponse.json({ session });
 }
