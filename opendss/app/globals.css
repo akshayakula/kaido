@@ -1,3 +1,5 @@
+@import "mapbox-gl/dist/mapbox-gl.css";
+
 @font-face {
   font-family: "GC Vank";
   src: url("/fonts/GC_Vank.woff2") format("woff2");
@@ -204,7 +206,8 @@ a {
   justify-content: center;
 }
 
-.home-header a {
+.home-header a,
+.home-footer a {
   pointer-events: auto;
   color: var(--text);
   text-decoration: underline;
@@ -234,6 +237,14 @@ a {
 .home-footer {
   position: relative;
   z-index: 10;
+}
+
+.home-footer > a {
+  display: inline-block;
+  margin-left: 24px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 
 .home-footer h1 {
@@ -390,6 +401,31 @@ h2 {
     linear-gradient(rgba(228, 226, 201, 0.04) 1px, transparent 1px),
     #17170f;
   background-size: 38px 38px;
+}
+
+.mapbox-globe-grid {
+  background:
+    linear-gradient(90deg, rgba(228, 226, 201, 0.035) 1px, transparent 1px),
+    linear-gradient(rgba(228, 226, 201, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 50% 50%, rgba(228, 226, 201, 0.08), transparent 38%),
+    #17170f;
+  background-size: 38px 38px, 38px 38px, auto;
+}
+
+.mapbox-globe-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.mapbox-globe-canvas .mapboxgl-canvas {
+  outline: none;
+}
+
+.mapboxgl-ctrl-logo,
+.mapboxgl-ctrl-attrib,
+.mapboxgl-control-container {
+  display: none !important;
 }
 
 .globe-orbit {
@@ -1120,6 +1156,10 @@ h2 {
 
   .dc-map-node {
     display: none;
+  }
+
+  .home-footer > a {
+    margin-left: 16px;
   }
 
   .franklin-site-card {
