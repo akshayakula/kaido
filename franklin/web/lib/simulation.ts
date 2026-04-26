@@ -59,6 +59,10 @@ const ASHBURN_DC_COORDS: Array<[number, number, string]> = [
   [38.7920, -77.5060, 'Iron Mountain (Manassas N)'],
 ];
 
+// How many sample DCs the dashboard shows. Joins beyond this either
+// recycle (replace the oldest non-pinned DC) or are quietly capped.
+export const MAX_DATACENTERS = 4;
+
 export function createSessionWithId(id: string): DemoSession {
   // Pin the demo to Northern Virginia Fabric (Ashburn) — the rest of the
   // grid map is tuned for Loudoun-area coordinates.
@@ -85,6 +89,9 @@ export function createSessionWithId(id: string): DemoSession {
     events: [],
   };
   addEvent(session, 'grid-agent', 'opendss', 'SOLVE_READY', `Seeded synthetic feeder at ${site.name}.`);
+  // Auto-seed MAX_DATACENTERS sample data centers so the dashboard has
+  // immediate content without anyone joining manually.
+  for (let i = 0; i < MAX_DATACENTERS; i++) createDataCenter(session);
   return session;
 }
 
@@ -132,6 +139,12 @@ export function normalizeSession(session: DemoSession) {
   const nova = SITES.find((s) => s.region.startsWith('Virginia'))!;
   if (!session.site || session.site.region !== nova.region) {
     session.site = nova;
+  }
+  // Cap at the configured sample count. Truncate excess; pad if short.
+  if (session.datacenters.length > MAX_DATACENTERS) {
+    session.datacenters = session.datacenters.slice(0, MAX_DATACENTERS);
+  } else if (session.datacenters.length < MAX_DATACENTERS) {
+    while (session.datacenters.length < MAX_DATACENTERS) createDataCenter(session);
   }
   session.datacenters.forEach((dc, i) => {
     const distFromAshburn = Math.hypot(dc.lat - 39.04, dc.lng - -77.49);
