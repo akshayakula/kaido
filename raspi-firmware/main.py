@@ -21,13 +21,14 @@ SI7021_MEAS_HUM    = 0xF5  # measure humidity, no hold master
 I2C_BUS            = 1
 
 # ADS1115 (4-ch ADC, used here for the SPW2430 analog mic on A0).
-# Config: single-ended A0, ±1.024V FSR (PGA=011 → good for SPW2430's small swing),
-# single-shot mode, 860 SPS (max), comparator disabled.
+# Config: single-ended A0, ±2.048V FSR (PGA=001), single-shot, 860 SPS.
+# SPW2430 at 3.3V Vdd biases at ~1.65V (Vdd/2), so we need ±2.048V FSR to
+# fit the bias plus audio swing without railing.
 ADS1115_ADDR       = 0x48
 ADS_REG_CONFIG     = 0x01
 ADS_REG_CONV       = 0x00
-ADS_CONFIG_A0      = 0xC7E3
-ADS_LSB_V          = 1.024 / 32768.0  # ≈31.25 µV / LSB at PGA=011
+ADS_CONFIG_A0      = 0xC3E3
+ADS_LSB_V          = 2.048 / 32768.0  # ≈62.5 µV / LSB at PGA=001
 MIC_ENABLED        = os.environ.get("MIC_ENABLED", "1") == "1"
 MIC_SAMPLES        = int(os.environ.get("MIC_SAMPLES", "50"))
 
@@ -131,6 +132,32 @@ def upstash_post(commands):
         print(f"upstash post failed: {e}", file=sys.stderr)
 
 
+# Inbound command channel. The cloud writes a JSON payload into the key
+# cmd:<DEVICE_ID> via Upstash REST; we poll once per loop, consume (DEL),
+# and act on it. Keeps the wire format flat: {"type": "...", ...}.
+COMMAND_KEY = f"cmd:{DEVICE_ID}"
+
+
+def fetch_pending_command():
+    """GETDEL cmd:<device> from Upstash. Returns dict or None."""
+    if not UPSTASH_URL or not UPSTASH_TOKEN:
+        return None
+    try:
+        r = requests.post(
+            f"{UPSTASH_URL}/getdel/{COMMAND_KEY}",
+            headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"},
+            timeout=5,
+        )
+        r.raise_for_status()
+        result = r.json().get("result")
+        if not result:
+            return None
+        return json.loads(result)
+    except (requests.RequestException, ValueError) as e:
+        print(f"command poll failed: {e}", file=sys.stderr)
+        return None
+
+
 def wifi_up():
     try:
         with open("/sys/class/net/wlan0/operstate") as f:
@@ -179,6 +206,13 @@ def main():
     signal.signal(signal.SIGTERM, _exit)
     signal.signal(signal.SIGINT, _exit)
 
+    # SIGUSR1 is used by the cloud (via ssh from the franklin server) to ask
+    # us to immediately poll the Upstash command channel instead of waiting
+    # for the next sample tick. The handler is intentionally a no-op — the
+    # interrupt itself wakes us from time.sleep, and the loop's next
+    # fetch_pending_command() call does the real work.
+    signal.signal(signal.SIGUSR1, lambda *_: None)
+
     ring.boot_wipe(strip)
     wait_for_wifi(strip)
 
@@ -192,10 +226,84 @@ def main():
 
     bus, mocked = open_bus()
     consecutive_read_fails = 0
+
+    # Latest viz state — updated each sample, consumed by the inner render loop.
+    viz_delta = 0.0
+    viz_stable = True
+    viz_mic_level = 0.0
+    last_mic_pp_v = 0.0
+
+    # Live tunables — overridable at runtime via the cloud `configure`
+    # command channel. Defaults match the comments at the call sites.
+    mic_noise_floor_v = 0.0003
+    mic_saturation_v = 0.005
+    temp_threshold_c = TEMP_THRESHOLD_C
+
+    def render_frames(seconds):
+        """Animate the ring at ~30 FPS for `seconds`, using current viz state."""
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            now = time.monotonic() - start
+            ring.render_load_audio(strip, viz_delta, temp_threshold_c,
+                                   viz_stable, viz_mic_level, now)
+            time.sleep(1.0 / 30.0)
+
+    def run_recalibrate_animation(seconds=6.0):
+        """Block the main loop and run a flashy LED pattern while the operator
+        watches the recalibration kick in. Resets the baseline buffer so the
+        next BASELINE_SAMPLES samples re-form the baseline."""
+        nonlocal baseline, baseline_samples
+        baseline = None
+        baseline_samples = []
+        anim_start = time.monotonic()
+        end = anim_start + seconds
+        while time.monotonic() < end:
+            elapsed = time.monotonic() - anim_start
+            ring.render_recalibrate(strip, elapsed, seconds)
+            time.sleep(1.0 / 60.0)
+        ring.clear(strip)
+        print("recalibration: baseline cleared", file=sys.stderr)
+
     try:
         while True:
             now_mono = time.monotonic()
             t = now_mono - start
+
+            # Inbound command poll. Cheap (single GETDEL); runs once per
+            # sample tick. Supports recalibrate (which can also carry
+            # tunables) and standalone configure.
+            cmd = fetch_pending_command()
+            if cmd:
+                print(f"command received: {cmd}", file=sys.stderr)
+
+                # Apply any tunables present in the payload first, so a
+                # combined recalibrate+configure picks them up before the
+                # animation runs.
+                if "mic_noise_floor_v" in cmd:
+                    try:
+                        mic_noise_floor_v = float(cmd["mic_noise_floor_v"])
+                    except (TypeError, ValueError):
+                        pass
+                if "mic_saturation_v" in cmd:
+                    try:
+                        mic_saturation_v = max(1e-6, float(cmd["mic_saturation_v"]))
+                    except (TypeError, ValueError):
+                        pass
+                if "temp_threshold_c" in cmd:
+                    try:
+                        temp_threshold_c = float(cmd["temp_threshold_c"])
+                    except (TypeError, ValueError):
+                        pass
+
+                ctype = cmd.get("type")
+                if ctype == "recalibrate":
+                    run_recalibrate_animation(float(cmd.get("duration", 6.0)))
+                elif ctype == "configure":
+                    print(
+                        f"configure applied: mic_floor={mic_noise_floor_v} "
+                        f"mic_sat={mic_saturation_v} temp_thresh={temp_threshold_c}",
+                        file=sys.stderr,
+                    )
 
             if mocked:
                 temp_c, humidity = mock_read(t)
@@ -211,8 +319,12 @@ def main():
                     # are visually obvious. After 5 in a row, fall back to
                     # mocked data so the rest of the pipeline keeps moving.
                     if consecutive_read_fails < 5:
-                        ring.render_warn(strip, t)
-                        time.sleep(SAMPLE_INTERVAL_S)
+                        # Render warn for the inter-sample period so the user
+                        # sees the wiring issue visually.
+                        end = time.monotonic() + SAMPLE_INTERVAL_S
+                        while time.monotonic() < end:
+                            ring.render_warn(strip, time.monotonic() - start)
+                            time.sleep(1.0 / 30.0)
                         continue
                     print("[mock] sensor reads keep failing; switching to mock",
                           file=sys.stderr)
@@ -226,15 +338,14 @@ def main():
                 if len(baseline_samples) >= BASELINE_SAMPLES:
                     baseline = sum(baseline_samples) / len(baseline_samples)
                     print(f"baseline locked: {baseline:.2f} C", file=sys.stderr)
-                # During baselining, render at neutral (delta = 0).
-                ring.render_load(strip, 0.0, TEMP_THRESHOLD_C, stable=True, t=t)
+                viz_delta = 0.0
+                viz_stable = True
             else:
-                delta = temp_c - baseline
-                stable = (
+                viz_delta = temp_c - baseline
+                viz_stable = (
                     len(samples) >= window_n
                     and statistics.pstdev(samples) < STABLE_STDDEV_C
                 )
-                ring.render_load(strip, delta, TEMP_THRESHOLD_C, stable, t)
 
             window_stddev = (
                 statistics.pstdev(samples) if len(samples) >= 2 else None
@@ -247,6 +358,14 @@ def main():
                     mic_pp_v, mic_dc_v = read_ads1115_mic(bus)
                 except OSError as e:
                     print(f"ads1115 read failed: {e}", file=sys.stderr)
+            # Map mic_pp into a 0..1 flicker level. Subtract noise floor
+            # (~0.0003 V) and saturate around 5 mV pp ≈ normal speech.
+            if mic_pp_v is not None:
+                last_mic_pp_v = mic_pp_v
+                viz_mic_level = max(
+                    0.0,
+                    min(1.0, (mic_pp_v - mic_noise_floor_v) / max(1e-6, mic_saturation_v)),
+                )
 
             payload = {
                 "ts": time.time(),
@@ -275,7 +394,8 @@ def main():
                 ["LTRIM", f"device:{DEVICE_ID}:tele", 0, DEVICE_TELE_MAX - 1],
             ])
 
-            time.sleep(SAMPLE_INTERVAL_S)
+            # Animate ring smoothly until it's time for the next sample.
+            render_frames(SAMPLE_INTERVAL_S)
     finally:
         if bus is not None:
             bus.close()

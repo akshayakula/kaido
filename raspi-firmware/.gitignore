@@ -1,4 +1,5 @@
 firmware.conf
 .env
+OPERATIONS.md
 *.pyc
 __pycache__/

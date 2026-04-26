@@ -49,6 +49,15 @@ LAMBDA_HOST = os.environ.get("LAMBDA_HOST", "ubuntu@193.122.246.239")
 LAMBDA_KEY = os.path.expanduser(os.environ.get("LAMBDA_KEY", "~/.ssh/lambda_kaido"))
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 
+# SSH endpoint for the Pi; used to nudge it to immediately poll the Upstash
+# command channel after we queue a command (otherwise it waits up to one
+# SAMPLE_INTERVAL_S for its next loop tick). Mac → Pi key auth is set up by
+# raspi-firmware/OPERATIONS.md.
+PI_SSH_HOSTS = {
+    # Map device id -> ssh target. Override via PI_SSH_<DEVICE> env vars.
+    "sensor1": os.environ.get("PI_SSH_SENSOR1", "pi-sensor1@192.168.1.14"),
+}
+
 SSH_OPTS = [
     "-i", LAMBDA_KEY,
     "-o", "StrictHostKeyChecking=no",
@@ -382,6 +391,55 @@ def upstash_inspect():
         items = u.cmd("ZRANGE", key, "0", str(limit - 1), "WITHSCORES") or []
         return jsonify({"key": key, "type": t, "items": items})
     return jsonify({"key": key, "type": t, "value": None})
+
+
+def _kick_pi(dev: str) -> dict:
+    """Fire-and-forget SSH to the Pi to send SIGUSR1 to the firmware so it
+    immediately polls the Upstash command channel instead of waiting for the
+    next sample tick. Returns a status dict; never raises."""
+    host = PI_SSH_HOSTS.get(dev)
+    if not host:
+        return {"kicked": False, "reason": f"no PI_SSH host for {dev}"}
+    try:
+        proc = subprocess.run(
+            [
+                "ssh",
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "ConnectTimeout=3",
+                "-o", "BatchMode=yes",
+                host,
+                "sudo systemctl kill --signal=SIGUSR1 firmware.service "
+                "|| sudo pkill -USR1 -f main.py",
+            ],
+            timeout=6, capture_output=True, text=True,
+        )
+        return {
+            "kicked": proc.returncode == 0,
+            "host": host,
+            "rc": proc.returncode,
+            "stderr": (proc.stderr or "").strip()[:200],
+        }
+    except Exception as e:
+        return {"kicked": False, "host": host, "error": str(e)}
+
+
+@app.route("/api/devices/<dev>/command", methods=["POST"])
+def device_command(dev: str):
+    """Queue a command for the Pi at cmd:<device>, then SSH the Pi to nudge
+    it to poll immediately. The firmware GETDELs cmd:<dev> and acts on it."""
+    from fusion.upstash import Upstash
+    body = request.get_json(force=True) or {}
+    cmd_type = (body.get("type") or "").strip()
+    if not cmd_type:
+        abort(400, "type required")
+    payload = {"type": cmd_type, "ts": time.time(),
+               **{k: v for k, v in body.items() if k != "type"}}
+    u = Upstash()
+    # 30s expiry: if the Pi is offline the command shouldn't sit forever.
+    res = u.cmd("SET", f"cmd:{dev}", json.dumps(payload), "EX", "30")
+    kick = _kick_pi(dev)
+    return jsonify({"queued": payload, "result": res, "kick": kick})
 
 
 @app.route("/api/health")
