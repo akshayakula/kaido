@@ -319,6 +319,71 @@ def list_events():
     return jsonify(u.lrange_json(EVENTS_KEY, 0, 99))
 
 
+@app.route("/api/upstash/keys")
+def upstash_keys():
+    """List Upstash keys with type + size hint. Pages via SCAN."""
+    from fusion.upstash import Upstash
+    u = Upstash()
+    match = request.args.get("match", "*")
+    max_keys = min(int(request.args.get("max", "500")), 5000)
+    keys: list[str] = []
+    cursor = "0"
+    while True:
+        res = u.cmd("SCAN", cursor, "MATCH", match, "COUNT", "200") or [cursor, []]
+        cursor = res[0] if isinstance(res, list) else "0"
+        batch = res[1] if isinstance(res, list) and len(res) > 1 else []
+        keys.extend(batch)
+        if cursor == "0" or len(keys) >= max_keys:
+            break
+    keys = sorted(set(keys))[:max_keys]
+    if not keys:
+        return jsonify([])
+    type_results = u.pipeline([["TYPE", k] for k in keys])
+    size_cmds = []
+    for k, t in zip(keys, type_results):
+        if t == "list":
+            size_cmds.append(["LLEN", k])
+        elif t == "set":
+            size_cmds.append(["SCARD", k])
+        elif t == "hash":
+            size_cmds.append(["HLEN", k])
+        elif t == "string":
+            size_cmds.append(["STRLEN", k])
+        else:
+            size_cmds.append(["TYPE", k])
+    sizes = u.pipeline(size_cmds) if size_cmds else []
+    out = [{"key": k, "type": t, "size": s} for k, t, s in zip(keys, type_results, sizes)]
+    return jsonify(out)
+
+
+@app.route("/api/upstash/inspect")
+def upstash_inspect():
+    """Return type + value for a single key. Lists/sets capped at limit items."""
+    from fusion.upstash import Upstash
+    u = Upstash()
+    key = request.args.get("key", "")
+    if not key:
+        return jsonify({"error": "missing key"}), 400
+    limit = min(int(request.args.get("limit", "200")), 2000)
+    t = u.cmd("TYPE", key)
+    if t == "string":
+        return jsonify({"key": key, "type": t, "value": u.cmd("GET", key)})
+    if t == "list":
+        n = u.cmd("LLEN", key) or 0
+        items = u.cmd("LRANGE", key, "0", str(limit - 1)) or []
+        return jsonify({"key": key, "type": t, "size": n, "items": items, "limit": limit})
+    if t == "set":
+        n = u.cmd("SCARD", key) or 0
+        items = u.cmd("SMEMBERS", key) or []
+        return jsonify({"key": key, "type": t, "size": n, "items": sorted(items)})
+    if t == "hash":
+        return jsonify({"key": key, "type": t, "value": u.cmd("HGETALL", key) or []})
+    if t == "zset":
+        items = u.cmd("ZRANGE", key, "0", str(limit - 1), "WITHSCORES") or []
+        return jsonify({"key": key, "type": t, "items": items})
+    return jsonify({"key": key, "type": t, "value": None})
+
+
 @app.route("/api/health")
 def health():
     return jsonify({

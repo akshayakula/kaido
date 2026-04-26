@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # Load-monitor firmware: Si7021 → Upstash Redis + NeoPixel ring visualization.
 import json
+import math
 import os
+import random
 import signal
 import statistics
 import sys
@@ -18,6 +20,17 @@ SI7021_MEAS_TEMP   = 0xF3  # measure temperature, no hold master
 SI7021_MEAS_HUM    = 0xF5  # measure humidity, no hold master
 I2C_BUS            = 1
 
+# ADS1115 (4-ch ADC, used here for the SPW2430 analog mic on A0).
+# Config: single-ended A0, ±1.024V FSR (PGA=011 → good for SPW2430's small swing),
+# single-shot mode, 860 SPS (max), comparator disabled.
+ADS1115_ADDR       = 0x48
+ADS_REG_CONFIG     = 0x01
+ADS_REG_CONV       = 0x00
+ADS_CONFIG_A0      = 0xC7E3
+ADS_LSB_V          = 1.024 / 32768.0  # ≈31.25 µV / LSB at PGA=011
+MIC_ENABLED        = os.environ.get("MIC_ENABLED", "1") == "1"
+MIC_SAMPLES        = int(os.environ.get("MIC_SAMPLES", "50"))
+
 PI_NAME            = os.environ.get("PI_NAME", "pi-load")
 DEVICE_ID          = os.environ.get("DEVICE_ID", "load1")
 DEVICE_ZONE        = os.environ.get("DEVICE_ZONE", "DOM")
@@ -33,6 +46,53 @@ BASELINE_SAMPLES   = int(os.environ.get("BASELINE_SAMPLES", "10"))
 TEMP_THRESHOLD_C   = float(os.environ.get("TEMP_THRESHOLD_C", "2.5"))
 STABLE_WINDOW_S    = float(os.environ.get("STABLE_WINDOW_S", "30"))
 STABLE_STDDEV_C    = float(os.environ.get("STABLE_STDDEV_C", "0.15"))
+
+
+MOCK_BASELINE_C   = float(os.environ.get("MOCK_BASELINE_C", "23.0"))
+MOCK_HUMIDITY     = float(os.environ.get("MOCK_HUMIDITY", "40.0"))
+MOCK_TEMP_AMP_C   = float(os.environ.get("MOCK_TEMP_AMP_C", "1.5"))
+MOCK_TEMP_PERIOD_S = float(os.environ.get("MOCK_TEMP_PERIOD_S", "180"))
+
+
+def mock_read(t):
+    """Synthesize plausible temp/humidity when no real sensor is available.
+
+    Slow sine drift around MOCK_BASELINE_C + small gaussian noise. Returns
+    (temp_c, humidity_pct).
+    """
+    drift = MOCK_TEMP_AMP_C * math.sin(2 * math.pi * t / MOCK_TEMP_PERIOD_S)
+    temp_c = MOCK_BASELINE_C + drift + random.gauss(0, 0.05)
+    humidity = MOCK_HUMIDITY + random.gauss(0, 0.3)
+    return temp_c, humidity
+
+
+def open_bus():
+    """Open I2C bus 1 if available; return (bus, mocked). Falls back to mock mode."""
+    try:
+        return SMBus(I2C_BUS), False
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        print(f"[mock] no I2C bus available ({e}); running with mocked sensors",
+              file=sys.stderr)
+        return None, True
+
+
+def read_ads1115_mic(bus, samples=None):
+    """Run N single-shot conversions on A0, return (peak_to_peak_v, dc_v)."""
+    n = samples or MIC_SAMPLES
+    cfg_hi = (ADS_CONFIG_A0 >> 8) & 0xFF
+    cfg_lo = ADS_CONFIG_A0 & 0xFF
+    raw = []
+    for _ in range(n):
+        bus.write_i2c_block_data(ADS1115_ADDR, ADS_REG_CONFIG, [cfg_hi, cfg_lo])
+        time.sleep(0.0015)  # 860 SPS → ~1.16 ms per conversion
+        d = bus.read_i2c_block_data(ADS1115_ADDR, ADS_REG_CONV, 2)
+        v = (d[0] << 8) | d[1]
+        if v & 0x8000:
+            v -= 0x10000
+        raw.append(v)
+    pp = (max(raw) - min(raw)) * ADS_LSB_V
+    dc = (sum(raw) / len(raw)) * ADS_LSB_V
+    return pp, dc
 
 
 def read_si7021(bus):
@@ -130,18 +190,34 @@ def main():
     baseline_samples = []
     start = time.monotonic()
 
-    with SMBus(I2C_BUS) as bus:
+    bus, mocked = open_bus()
+    consecutive_read_fails = 0
+    try:
         while True:
             now_mono = time.monotonic()
             t = now_mono - start
 
-            try:
-                temp_c, humidity = read_si7021(bus)
-            except OSError as e:
-                print(f"i2c read failed: {e}", file=sys.stderr)
-                ring.render_warn(strip, t)
-                time.sleep(SAMPLE_INTERVAL_S)
-                continue
+            if mocked:
+                temp_c, humidity = mock_read(t)
+            else:
+                try:
+                    temp_c, humidity = read_si7021(bus)
+                    consecutive_read_fails = 0
+                except OSError as e:
+                    consecutive_read_fails += 1
+                    print(f"i2c read failed ({consecutive_read_fails}): {e}",
+                          file=sys.stderr)
+                    # First few failures: show warn so wiring/sensor issues
+                    # are visually obvious. After 5 in a row, fall back to
+                    # mocked data so the rest of the pipeline keeps moving.
+                    if consecutive_read_fails < 5:
+                        ring.render_warn(strip, t)
+                        time.sleep(SAMPLE_INTERVAL_S)
+                        continue
+                    print("[mock] sensor reads keep failing; switching to mock",
+                          file=sys.stderr)
+                    mocked = True
+                    temp_c, humidity = mock_read(t)
 
             samples.append(temp_c)
 
@@ -163,6 +239,15 @@ def main():
             window_stddev = (
                 statistics.pstdev(samples) if len(samples) >= 2 else None
             )
+
+            mic_pp_v = None
+            mic_dc_v = None
+            if not mocked and MIC_ENABLED and bus is not None:
+                try:
+                    mic_pp_v, mic_dc_v = read_ads1115_mic(bus)
+                except OSError as e:
+                    print(f"ads1115 read failed: {e}", file=sys.stderr)
+
             payload = {
                 "ts": time.time(),
                 "device": DEVICE_ID,
@@ -175,6 +260,9 @@ def main():
                     window_stddev is not None and window_stddev < STABLE_STDDEV_C
                 ) if baseline is not None else None,
                 "stddev_c": round(window_stddev, 4) if window_stddev is not None else None,
+                "mocked": mocked,
+                "mic_pp_v": round(mic_pp_v, 6) if mic_pp_v is not None else None,
+                "mic_dc_v": round(mic_dc_v, 4) if mic_dc_v is not None else None,
             }
             payload_json = json.dumps(payload)
             upstash_post([
@@ -188,6 +276,9 @@ def main():
             ])
 
             time.sleep(SAMPLE_INTERVAL_S)
+    finally:
+        if bus is not None:
+            bus.close()
 
 
 if __name__ == "__main__":

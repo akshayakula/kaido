@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>franklin · upstash</title>
+<style>
+  :root {
+    --bg: #07070a; --bg2: #0e0e14; --panel: #14141d; --panel2: #1a1a25;
+    --border: #25253a; --fg: #e7e7ee; --muted: #6a6a78;
+    --accent: #ffb454;
+    --type-string: #34d399;
+    --type-list:   #60a5fa;
+    --type-set:    #a78bfa;
+    --type-hash:   #f59e0b;
+    --type-zset:   #f87171;
+  }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font:13px/1.5 ui-monospace,"SF Mono",Menlo,monospace; }
+  body { display:grid; grid-template-rows: auto 1fr; height:100vh; overflow:hidden; }
+
+  header { padding:14px 22px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  header h1 { margin:0; font-size:14px; font-weight:700; letter-spacing:.04em; }
+  header h1 small { color:var(--muted); margin-left:10px; font-weight:400; }
+  nav.tabs a { color:var(--muted); margin-left:14px; text-decoration:none; padding:6px 10px; border-radius:4px; }
+  nav.tabs a.active { color:var(--accent); background:rgba(255,180,84,.08); }
+
+  main { display:grid; grid-template-columns: 360px 1fr; min-height:0; }
+
+  aside { background:var(--bg2); border-right:1px solid var(--border);
+    display:flex; flex-direction:column; min-height:0; }
+  aside .toolbar { padding:12px 12px 8px; border-bottom:1px solid var(--border);
+    display:flex; gap:8px; flex-direction:column; }
+  aside .toolbar input, aside .toolbar select, aside .toolbar button {
+    background:var(--panel); color:var(--fg); border:1px solid var(--border);
+    border-radius:4px; padding:6px 8px; font:inherit; }
+  aside .toolbar .row { display:flex; gap:6px; }
+  aside .toolbar .row > * { flex:1; }
+  aside .toolbar .meta { font-size:11px; color:var(--muted); }
+  aside .toolbar label { font-size:11px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+
+  .keys { overflow-y:auto; padding:6px; }
+  .key-item { padding:6px 8px; cursor:pointer; border-radius:3px;
+    display:flex; align-items:center; gap:8px; justify-content:space-between; }
+  .key-item:hover { background:var(--panel); }
+  .key-item.active { color:var(--accent); background:rgba(255,180,84,.08); }
+  .key-item .name { font-size:11.5px; word-break:break-all; flex:1; }
+  .key-item .badge { font-size:10px; padding:1px 6px; border-radius:3px;
+    background:var(--panel2); border:1px solid var(--border); flex-shrink:0; }
+  .key-item .badge.t-string { color:var(--type-string); }
+  .key-item .badge.t-list   { color:var(--type-list); }
+  .key-item .badge.t-set    { color:var(--type-set); }
+  .key-item .badge.t-hash   { color:var(--type-hash); }
+  .key-item .badge.t-zset   { color:var(--type-zset); }
+  .key-item .size { font-size:10px; color:var(--muted); flex-shrink:0; }
+
+  section.detail { display:flex; flex-direction:column; min-height:0; padding:14px 22px; gap:12px; overflow:hidden; }
+  .detail-head { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  .detail-head h2 { margin:0; font-size:13px; font-weight:600; word-break:break-all; }
+  .detail-head h2 .type { font-size:10px; padding:2px 6px; border-radius:3px;
+    background:var(--panel2); border:1px solid var(--border); margin-left:8px; }
+  .detail-head .info { font-size:11px; color:var(--muted); }
+
+  pre.value { margin:0; flex:1; overflow:auto; background:var(--panel); padding:14px;
+    border:1px solid var(--border); border-radius:6px; white-space:pre;
+    font-size:12px; line-height:1.55; }
+
+  .empty { color:var(--muted); padding:32px; text-align:center; }
+
+  button { cursor:pointer; }
+  button.primary { background:var(--accent); color:#1a1108; border:none; font-weight:600; }
+  button.primary:hover { filter:brightness(1.05); }
+
+  .json-key   { color:#a78bfa; }
+  .json-str   { color:#34d399; }
+  .json-num   { color:#60a5fa; }
+  .json-bool  { color:#f59e0b; }
+  .json-null  { color:#6a6a78; }
+</style>
+</head>
+<body>
+<header>
+  <h1>franklin <small>upstash · key browser</small></h1>
+  <nav class="tabs">
+    <a href="/viewer/fleet.html">fleet</a>
+    <a href="/viewer/">audio analysis</a>
+    <a href="/viewer/upstash.html" class="active">upstash</a>
+  </nav>
+</header>
+
+<main>
+  <aside>
+    <div class="toolbar">
+      <div class="row">
+        <input id="match" placeholder="MATCH glob (e.g. device:*)" value="*">
+        <button id="refresh">scan</button>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="auto"> auto-refresh 5s</label>
+      </div>
+      <div class="meta" id="meta">—</div>
+    </div>
+    <div class="keys" id="keys"></div>
+  </aside>
+  <section class="detail">
+    <div class="detail-head">
+      <h2 id="detail-key">select a key</h2>
+      <div class="info" id="detail-info"></div>
+    </div>
+    <pre class="value" id="detail-value"></pre>
+  </section>
+</main>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+const keysEl = $("#keys");
+const matchEl = $("#match");
+const metaEl = $("#meta");
+const detailKey = $("#detail-key");
+const detailInfo = $("#detail-info");
+const detailValue = $("#detail-value");
+const autoEl = $("#auto");
+
+let activeKey = null;
+let autoTimer = null;
+
+function htmlEscape(s) {
+  return String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+}
+
+function tryParse(s) {
+  if (typeof s !== "string") return s;
+  try { return JSON.parse(s); } catch { return s; }
+}
+
+function highlightJson(obj) {
+  const str = JSON.stringify(obj, null, 2);
+  return htmlEscape(str)
+    .replace(/&quot;([^&]+?)&quot;:/g, '<span class="json-key">&quot;$1&quot;</span>:')
+    .replace(/: &quot;([^&]*?)&quot;/g, ': <span class="json-str">&quot;$1&quot;</span>')
+    .replace(/: (-?\d+\.?\d*(?:e-?\d+)?)/g, ': <span class="json-num">$1</span>')
+    .replace(/: (true|false)/g, ': <span class="json-bool">$1</span>')
+    .replace(/: null/g, ': <span class="json-null">null</span>');
+}
+
+async function loadKeys() {
+  const match = matchEl.value || "*";
+  metaEl.textContent = "scanning…";
+  try {
+    const r = await fetch(`/api/upstash/keys?match=${encodeURIComponent(match)}`);
+    const data = await r.json();
+    metaEl.textContent = `${data.length} keys (match: ${match})`;
+    renderKeys(data);
+  } catch (e) {
+    metaEl.textContent = `error: ${e.message}`;
+  }
+}
+
+function renderKeys(items) {
+  keysEl.innerHTML = "";
+  for (const it of items) {
+    const div = document.createElement("div");
+    div.className = "key-item" + (it.key === activeKey ? " active" : "");
+    div.innerHTML = `
+      <span class="name">${htmlEscape(it.key)}</span>
+      <span class="size">${formatSize(it)}</span>
+      <span class="badge t-${it.type}">${it.type}</span>`;
+    div.onclick = () => selectKey(it.key);
+    keysEl.appendChild(div);
+  }
+}
+
+function formatSize(it) {
+  if (it.type === "string") return `${it.size}b`;
+  if (typeof it.size === "number") return `${it.size}`;
+  return "";
+}
+
+async function selectKey(key) {
+  activeKey = key;
+  for (const el of keysEl.children) el.classList.toggle("active", el.querySelector(".name").textContent === key);
+  detailKey.innerHTML = htmlEscape(key) + ` <span class="type" id="detail-type"></span>`;
+  detailInfo.textContent = "";
+  detailValue.textContent = "loading…";
+  try {
+    const r = await fetch(`/api/upstash/inspect?key=${encodeURIComponent(key)}`);
+    const data = await r.json();
+    document.getElementById("detail-type").textContent = data.type;
+    if (data.type === "string") {
+      detailInfo.textContent = `${data.value?.length ?? 0} chars`;
+      detailValue.innerHTML = highlightJson(tryParse(data.value));
+    } else if (data.type === "list") {
+      detailInfo.textContent = `${data.size} items (showing ${data.items.length})`;
+      const parsed = data.items.map(tryParse);
+      detailValue.innerHTML = highlightJson(parsed);
+    } else if (data.type === "set") {
+      detailInfo.textContent = `${data.size} members`;
+      detailValue.innerHTML = highlightJson(data.items);
+    } else if (data.type === "hash") {
+      detailInfo.textContent = "hash";
+      detailValue.innerHTML = highlightJson(data.value);
+    } else if (data.type === "zset") {
+      detailInfo.textContent = `${(data.items || []).length / 2} members`;
+      detailValue.innerHTML = highlightJson(data.items);
+    } else {
+      detailInfo.textContent = "no value";
+      detailValue.textContent = "(none)";
+    }
+  } catch (e) {
+    detailValue.textContent = `error: ${e.message}`;
+  }
+}
+
+$("#refresh").onclick = () => { loadKeys(); if (activeKey) selectKey(activeKey); };
+matchEl.addEventListener("keydown", e => { if (e.key === "Enter") loadKeys(); });
+autoEl.addEventListener("change", () => {
+  if (autoEl.checked) {
+    autoTimer = setInterval(() => {
+      loadKeys();
+      if (activeKey) selectKey(activeKey);
+    }, 5000);
+  } else {
+    clearInterval(autoTimer);
+    autoTimer = null;
+  }
+});
+
+loadKeys();
+</script>
+</body>
+</html>
