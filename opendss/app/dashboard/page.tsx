@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { GridMap } from '@/components/GridMap';
-import type { DataCenterAgent, DemoSession, Scenario } from '@/lib/types';
+import type { AgentEvent, DataCenterAgent, DemoSession, Scenario } from '@/lib/types';
 import { summarizeKw } from '@/lib/simulation';
 
 const DEFAULT_SESSION_ID = 'default';
@@ -217,21 +217,24 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="panel">
+        <section className="panel negotiation-panel">
           <div className="panel-head compact">
             <div>
               <p className="eyebrow">A2A negotiation</p>
-              <h2>Live agent messages</h2>
+              <h2>Agent conversation</h2>
             </div>
           </div>
-          <div className="event-list">
-            {session?.events.map((event) => (
-              <article key={event.id} className="event">
-                <div><b>{event.type}</b><span>{new Date(event.at).toLocaleTimeString()}</span></div>
-                <p>{event.from} {'->'} {event.to}</p>
-                <small>{event.body}</small>
-              </article>
-            )) ?? <div className="empty">Waiting for a session.</div>}
+          <div className="conversation-map" aria-label="Agent conversation legend">
+            <span>Grid agent</span>
+            <i />
+            <span>Data-center agents</span>
+            <i />
+            <span>Slurm + OpenDSS</span>
+          </div>
+          <div className="event-list conversation-thread">
+            {session?.events.length ? session.events.map((event, index) => (
+              <ConversationEvent key={event.id} event={event} isLatest={index === 0} />
+            )) : <div className="empty">Waiting for agents to negotiate.</div>}
           </div>
           <form className="chat-form" onSubmit={sendOperatorMessage}>
             <input
@@ -276,6 +279,90 @@ export default function DashboardPage() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <div className="metric"><span>{label}</span><b>{value}</b></div>;
+}
+
+function ConversationEvent({ event, isLatest }: { event: AgentEvent; isLatest: boolean }) {
+  const fromRole = agentRole(event.from);
+  const toRole = agentRole(event.to);
+  const tone = eventTone(event.type);
+
+  return (
+    <article className={`event conversation-event ${tone}`} data-latest={isLatest ? 'true' : 'false'}>
+      <div className="conversation-meta">
+        <span className="move-label">{isLatest ? 'Latest move' : eventMoveLabel(event.type)}</span>
+        <time>{new Date(event.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</time>
+      </div>
+      <div className="conversation-route">
+        <span className="actor-chip" data-role={fromRole}>{formatActor(event.from)}</span>
+        <span className="route-arrow">to</span>
+        <span className="actor-chip" data-role={toRole}>{formatActor(event.to)}</span>
+      </div>
+      <p className="conversation-title">{eventMoveLabel(event.type)}</p>
+      <small>{event.body}</small>
+      <div className="conversation-hint">{eventHint(event)}</div>
+    </article>
+  );
+}
+
+function formatActor(actor: string) {
+  const labels: Record<string, string> = {
+    'grid-agent': 'Grid agent',
+    'data-center-agents': 'All data centers',
+    opendss: 'OpenDSS',
+    slurm: 'Slurm scheduler',
+    operator: 'Operator',
+    'ai-agent': 'NIM agent',
+    demo: 'Demo runtime',
+  };
+  return labels[actor] ?? actor;
+}
+
+function agentRole(actor: string) {
+  if (actor === 'grid-agent') return 'grid';
+  if (actor === 'opendss') return 'opendss';
+  if (actor === 'slurm') return 'scheduler';
+  if (actor === 'operator') return 'operator';
+  if (actor === 'data-center-agents') return 'datacenter';
+  if (actor === 'ai-agent' || actor === 'demo') return 'system';
+  return 'datacenter';
+}
+
+function eventMoveLabel(type: string) {
+  const labels: Record<string, string> = {
+    SOLVE_READY: 'Grid model initialized',
+    JOIN_GRID: 'Data center joined',
+    SBATCH: 'Inference jobs submitted',
+    MANUAL_OVERRIDE: 'Operator override',
+    SCENARIO_CHANGE: 'Scenario changed',
+    REQUEST_RELIEF: 'Grid asks for relief',
+    RELIEF_OFFER: 'Data center offers flexibility',
+    POWER_FLOW_RESULT: 'OpenDSS reports grid health',
+    AI_NEGOTIATION: 'Agent explains tradeoff',
+    AI_DISABLED: 'AI messaging disabled',
+    AI_FALLBACK: 'Fallback negotiation message',
+    CHAT: 'Direct message',
+  };
+  return labels[type] ?? type.replaceAll('_', ' ').toLowerCase();
+}
+
+function eventTone(type: string) {
+  if (type === 'REQUEST_RELIEF' || type === 'POWER_FLOW_RESULT') return 'grid-move';
+  if (type === 'RELIEF_OFFER' || type === 'SBATCH' || type === 'JOIN_GRID') return 'datacenter-move';
+  if (type === 'MANUAL_OVERRIDE' || type === 'SCENARIO_CHANGE' || type === 'CHAT') return 'operator-move';
+  if (type.startsWith('AI_')) return 'ai-move';
+  return 'system-move';
+}
+
+function eventHint(event: AgentEvent) {
+  if (event.type === 'REQUEST_RELIEF') return 'Meaning: the grid is constrained, so data centers should reduce flexible GPU work or use batteries.';
+  if (event.type === 'RELIEF_OFFER') return 'Meaning: a data-center agent found schedulable load it can delay or shift.';
+  if (event.type === 'POWER_FLOW_RESULT') return 'Meaning: OpenDSS solved the feeder after the latest scheduler actions.';
+  if (event.type === 'SBATCH') return 'Meaning: participant demand entered the mock Slurm queue.';
+  if (event.type === 'AI_NEGOTIATION') return 'Meaning: the agent is translating grid state into a scheduling decision.';
+  if (event.type === 'MANUAL_OVERRIDE') return 'Meaning: the operator directly changed one data center agent.';
+  if (event.type === 'SCENARIO_CHANGE') return 'Meaning: the grid agent is reacting to a new disruption condition.';
+  if (event.type === 'JOIN_GRID') return 'Meaning: a phone/browser joined as a simulated data-center agent.';
+  return `Raw event: ${event.type}`;
 }
 
 function getDrawLevel(session: DemoSession) {
