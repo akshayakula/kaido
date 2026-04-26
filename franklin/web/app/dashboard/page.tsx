@@ -284,6 +284,7 @@ export default function DashboardPage() {
         </aside>
       </section>
 
+      <aside className="dashboard-hud">
       <section className="lower-grid diagnostics-bottom">
         <section className="panel gpu-scheduler-panel">
           <div className="panel-head compact">
@@ -401,6 +402,7 @@ export default function DashboardPage() {
           <div className="empty">Waiting for the default session.</div>
         )}
       </section>
+      </aside>
     </main>
   );
 }

@@ -2964,3 +2964,88 @@ h2 {
 .dashboard-screen .lower-grid.diagnostics-bottom {
   align-items: start;
 }
+
+/* ===========================================================
+   Unified dashboard HUD — one transparent panel covering the
+   map, holding lower-grid + terminal-panel.
+   =========================================================== */
+.dashboard-screen .dashboard-hud {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  top: 156px;
+  z-index: 9;
+  padding: 12px;
+  background: rgba(8, 9, 6, 0.30);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(228, 226, 201, 0.18);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  overflow: auto;
+  pointer-events: auto;
+}
+
+/* Reset positions on the cards moved inside the HUD so they flow
+   naturally instead of pinning to the viewport. */
+.dashboard-screen .dashboard-hud > .lower-grid.diagnostics-bottom {
+  position: relative;
+  left: auto; right: auto; top: auto; bottom: auto;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.dashboard-screen .dashboard-hud > .terminal-panel {
+  position: relative;
+  left: auto; right: auto; top: auto; bottom: auto;
+  width: 100%;
+  max-width: 100%;
+  max-height: 24vh;
+}
+
+/* Make the side-stack (status cards + analog) overlay-friendly: pull
+   it to the upper-right corner of the HUD area. Keep it absolute so
+   it doesn't disturb the lower grid layout. */
+.dashboard-screen .diagnostics-stack {
+  /* leaves the existing absolute positioning intact, so the status
+     cards remain a tight column at top-right of the screen. */
+}
+
+/* Card backgrounds inside the HUD: keep them subtly translucent so
+   the map still shows through the whole stack. */
+.dashboard-screen .dashboard-hud .panel,
+.dashboard-screen .dashboard-hud .gpu-scheduler-panel,
+.dashboard-screen .dashboard-hud .negotiation-panel,
+.dashboard-screen .dashboard-hud .terminal-panel {
+  background-color: rgba(23, 23, 15, 0.40);
+  border-color: rgba(228, 226, 201, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+/* On small desktops, single-column the lower grid inside the HUD */
+@media (max-width: 1199px) {
+  .dashboard-screen .dashboard-hud {
+    top: 220px;
+  }
+  .dashboard-screen .dashboard-hud > .lower-grid.diagnostics-bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* On phones, the existing media query already hides the map and
+   reflows everything; HUD reverts to relative inline */
+@media (max-width: 600px) {
+  .dashboard-screen .dashboard-hud {
+    position: relative;
+    left: auto; right: auto; top: auto; bottom: auto;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    backdrop-filter: none;
+  }
+  .dashboard-screen .dashboard-hud > .lower-grid.diagnostics-bottom {
+    grid-template-columns: 1fr;
+  }
+}
