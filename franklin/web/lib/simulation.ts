@@ -38,8 +38,23 @@ export function createSession(): DemoSession {
   return createSessionWithId(id);
 }
 
+// Real Loudoun / Prince William datacenter campus locations — used to seed
+// the dashboard with believable Ashburn-area coordinates rather than a random
+// angular spread. Seeded round-robin in createDataCenter.
+const ASHBURN_DC_COORDS: Array<[number, number, string]> = [
+  [39.0166, -77.4769, 'Equinix DC2/DC4 (Ashburn)'],
+  [39.0066, -77.4291, 'Digital Realty (Sterling)'],
+  [38.9587, -77.3570, 'Iron Mountain (Reston)'],
+  [39.1116, -77.5636, 'Loudoun (Leesburg)'],
+  [38.7509, -77.4753, 'Cologix (Manassas)'],
+  [38.9333, -77.4467, 'CoreSite (Reston West)'],
+  [39.0438, -77.4874, 'NoVA Fabric (Ashburn)'],
+];
+
 export function createSessionWithId(id: string): DemoSession {
-  const site = SITES[Math.floor(Math.random() * SITES.length)];
+  // Pin the demo to Northern Virginia Fabric (Ashburn) — the rest of the
+  // grid map is tuned for Loudoun-area coordinates.
+  const site = SITES.find((s) => s.region.startsWith('Virginia')) ?? SITES[0];
   const session: DemoSession = {
     id,
     label: id === 'default' ? 'Default grid demo' : `Grid demo ${id.toUpperCase()}`,
@@ -67,13 +82,15 @@ export function createSessionWithId(id: string): DemoSession {
 
 export function createDataCenter(session: DemoSession, displayName?: string): DataCenterAgent {
   const n = session.datacenters.length + 1;
-  const angle = (Math.PI * 2 * n) / 7;
-  const spread = 0.58 + (n % 3) * 0.16;
+  // Round-robin through the canonical Ashburn-area campus list. Tiny
+  // gaussian-ish jitter keeps adjacent virtual DCs from colliding.
+  const slot = ASHBURN_DC_COORDS[(n - 1) % ASHBURN_DC_COORDS.length];
+  const jitter = 0.005 * (((n * 1103515245) % 1000) / 1000 - 0.5);
   const dc: DataCenterAgent = {
     id: crypto.randomUUID().slice(0, 10),
-    name: displayName?.trim() || `Data Center ${String(n).padStart(2, '0')}`,
-    lat: session.site.lat + Math.sin(angle) * spread,
-    lng: session.site.lng + Math.cos(angle) * spread,
+    name: displayName?.trim() || slot[2],
+    lat: slot[0] + jitter,
+    lng: slot[1] + jitter * 1.3,
     joinedAt: Date.now(),
     gpuCount: 96 + (n % 5) * 48,
     gpuKw: 0.72 + (n % 3) * 0.04,

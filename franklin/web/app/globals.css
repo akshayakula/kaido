@@ -1858,9 +1858,9 @@ h2 {
 .dashboard-screen .globe-panel > .panel-head {
   position: absolute;
   left: 18px;
-  top: 132px;
+  top: 156px;
   z-index: 8;
-  width: min(330px, calc(100vw - 36px));
+  width: min(300px, calc(100vw - 36px));
   margin: 0;
   padding: 10px;
   border: 1px solid rgba(228, 226, 201, 0.18);
@@ -1902,18 +1902,18 @@ h2 {
 }
 
 .dashboard-screen .site-card {
-  top: 250px;
+  top: 408px;
   left: 18px;
-  max-width: 240px;
+  max-width: 230px;
   background: rgba(23, 23, 15, 0.48);
 }
 
 .dashboard-screen .cylinder-readout {
-  top: 340px;
+  top: 524px;
   left: 18px;
   right: auto;
-  width: 230px;
-  max-height: 270px;
+  width: 300px;
+  max-height: calc(100vh - 524px - 110px);
   min-height: 0;
   padding: 8px;
   background: rgba(23, 23, 15, 0.46);
@@ -1930,9 +1930,14 @@ h2 {
 }
 
 .dashboard-screen .map-legend {
-  left: 18px;
+  left: auto;
+  right: 18px;
   bottom: 18px;
   z-index: 7;
+  background: rgba(23, 23, 15, 0.62);
+  backdrop-filter: blur(14px);
+  padding: 8px 10px;
+  border: 1px solid rgba(228, 226, 201, 0.18);
 }
 
 .dashboard-screen .map-note {
@@ -2030,8 +2035,8 @@ h2 {
 
 .dashboard-screen .diagnostics-bottom {
   position: absolute;
-  left: 266px;
-  right: 368px;
+  left: 336px;
+  right: 408px;
   bottom: 18px;
   z-index: 9;
   display: grid;
@@ -2153,8 +2158,8 @@ h2 {
   }
 
   .dashboard-screen .diagnostics-bottom {
-    left: 266px;
-    right: 358px;
+    left: 336px;
+    right: 408px;
     grid-template-columns: 1fr;
   }
 }

@@ -79,8 +79,10 @@ export function GridMap({ session }: GridMapProps) {
       const powerPressure = Math.min(1, kw / maxKw);
       const liveDemand = dc.queueDepth > 0 ? Math.sin((session.tick + index * 4) / 3.2) * 0.08 : 0;
       const loadSignal = Math.max(0.08, Math.min(1, powerPressure * 0.62 + queuePressure * 0.18 + Math.min(0.2, deferredKw / 1200) + liveDemand));
-      const lat = center.lat + (dc.lat - center.lat) * 18;
-      const lng = center.lng + (dc.lng - center.lng) * 18;
+      // Use real coordinates — the simulation now seeds DCs at actual Ashburn-
+      // area campus locations, so we don't need to amplify around the center.
+      const lat = dc.lat;
+      const lng = dc.lng;
       return {
         dc,
         draw,
@@ -203,20 +205,25 @@ export function GridMap({ session }: GridMapProps) {
           },
         ],
       },
-      center: [view.center.lng, view.center.lat],
-      zoom: 1.65,
-      projection: { name: 'globe' },
+      // Centered on Ashburn / Data Center Alley. Mercator (not globe) since
+      // we're zoomed in too far for a globe projection to look right.
+      center: [-77.49, 39.01],
+      zoom: 9.4,
+      projection: { name: 'mercator' },
       interactive: true,
       attributionControl: false,
       renderWorldCopies: false,
       dragRotate: true,
-      pitch: 18,
-      bearing: -18,
+      pitch: 38,
+      bearing: -14,
     });
 
-    map.scrollZoom.disable();
-    map.boxZoom.disable();
-    map.doubleClickZoom.disable();
+    // Allow normal zoom: scroll wheel, pinch, double-click, box-select.
+    // Earlier we disabled these for the static globe view; at metro scale
+    // the user wants to zoom in/out.
+    map.scrollZoom.enable();
+    map.boxZoom.enable();
+    map.doubleClickZoom.enable();
     map.touchZoomRotate.enableRotation();
 
     map.on('style.load', () => {
@@ -230,6 +237,9 @@ export function GridMap({ session }: GridMapProps) {
       updateMapSources(map, view);
     });
 
+    // Slow bearing drift instead of full longitude spin (we're zoomed into
+    // a single metro area now). Pause only on real gestures.
+    const BEARING_DEG_PER_SEC = 0.6;
     let frame = 0;
     let last = performance.now();
     let interacting = false;
@@ -238,8 +248,8 @@ export function GridMap({ session }: GridMapProps) {
       const dt = (time - last) / 1000;
       last = time;
       if (!interacting) {
-        const centerNow = map.getCenter();
-        map.jumpTo({ center: [centerNow.lng + dt * 0.35, centerNow.lat] });
+        const bearing = map.getBearing();
+        map.jumpTo({ bearing: bearing + dt * BEARING_DEG_PER_SEC });
       }
       frame = window.requestAnimationFrame(spin);
     };
@@ -261,12 +271,10 @@ export function GridMap({ session }: GridMapProps) {
     map.on('rotatestart', pause);
     map.on('pitchstart', pause);
     map.on('touchstart', pause);
-    map.on('mousedown', pause);
     map.on('dragend', resume);
     map.on('rotateend', resume);
     map.on('pitchend', resume);
     map.on('touchend', resume);
-    map.on('mouseup', resume);
 
     mapRef.current = map;
     return () => {
@@ -356,11 +364,13 @@ function updateMapSources(map: mapboxgl.Map, view: GridView) {
       type: 'Feature',
       geometry: {
         type: 'Polygon',
-        coordinates: [circlePolygon(node.lng, node.lat, 0.24 + node.loadSignal * 0.44)],
+        coordinates: [circlePolygon(node.lng, node.lat, 0.005 + node.loadSignal * 0.012)],
       },
       properties: {
         color: node.color,
-        height: 80000 + node.loadSignal * 1550000,
+        // Heights tuned for metro-scale view (a few hundred meters,
+        // visually scaled by the camera at zoom ≈ 9-10).
+        height: 600 + node.loadSignal * 9000,
       },
     })),
   });
@@ -402,7 +412,8 @@ function arcCoordinates(from: [number, number], to: [number, number]) {
   const coords: [number, number][] = [];
   for (let i = 0; i <= 32; i += 1) {
     const t = i / 32;
-    const lift = Math.sin(Math.PI * t) * 0.8;
+    // Smaller arc lift for metro-scale (no globe projection).
+    const lift = Math.sin(Math.PI * t) * 0.02;
     coords.push([
       from[0] + (to[0] - from[0]) * t,
       from[1] + (to[1] - from[1]) * t + lift,

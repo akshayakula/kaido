@@ -139,6 +139,10 @@ export function HomeMapboxGlobe() {
       updateHomeSources(map);
     });
 
+    // Rotate ~one revolution every minute (6 °/sec). Pause only on real
+    // gestures (drag / rotate / pitch / touch). A hover or stray click
+    // shouldn't stop the spin.
+    const SPIN_DEG_PER_SEC = 6;
     let frame = 0;
     let last = performance.now();
     let interacting = false;
@@ -148,7 +152,8 @@ export function HomeMapboxGlobe() {
       last = time;
       if (!interacting) {
         const center = map.getCenter();
-        map.jumpTo({ center: [center.lng + dt * 0.22, center.lat] });
+        const nextLng = ((center.lng + dt * SPIN_DEG_PER_SEC + 180) % 360) - 180;
+        map.jumpTo({ center: [nextLng, center.lat] });
       }
       frame = window.requestAnimationFrame(spin);
     };
@@ -170,12 +175,10 @@ export function HomeMapboxGlobe() {
     map.on('rotatestart', pause);
     map.on('pitchstart', pause);
     map.on('touchstart', pause);
-    map.on('mousedown', pause);
     map.on('dragend', resume);
     map.on('rotateend', resume);
     map.on('pitchend', resume);
     map.on('touchend', resume);
-    map.on('mouseup', resume);
 
     mapRef.current = map;
     return () => {
