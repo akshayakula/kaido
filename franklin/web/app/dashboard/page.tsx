@@ -203,15 +203,16 @@ export default function DashboardPage() {
   return (
     <main className="dashboard-screen">
       <header className="hero operator-topbar">
+        <a className="brand-link" href="/" aria-label="Franklin home">Franklin</a>
         <div className="hero-fade">
           <p className="eyebrow">OpenDSS Agent Demo · Franklin Grid Sense</p>
           <h1>FRANKLIN GRID</h1>
           <p className="hero-copy">A live operator console where data-center agents negotiate inference load against an OpenDSS-backed distribution grid.</p>
         </div>
         <div className="hero-actions">
-          <a className="secondary-link" href="/readouts">Readouts</a>
-          <a className="secondary-link" href="/grid-sensor">Franklin sensors</a>
-          <a className="primary-link join-cta" href="/join">Join as data center →</a>
+          <a className="hdr-btn" href="/readouts">Readouts</a>
+          <a className="hdr-btn" href="/grid-sensor">Franklin sensors</a>
+          <a className="hdr-btn hdr-btn--primary" href="/join">Join as data center →</a>
         </div>
       </header>
 

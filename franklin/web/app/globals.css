@@ -3073,3 +3073,100 @@ h2 {
     opacity: 1;
   }
 }
+
+/* Header brand link (Franklin logo / home) */
+.dashboard-screen .brand-link {
+  position: absolute;
+  left: 18px;
+  top: 14px;
+  z-index: 13;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  font-family: "GC Vank", "Impact", "Arial Narrow Bold", sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  border: 1px solid var(--line);
+  background: rgba(8, 9, 6, 0.5);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  text-decoration: none;
+  transition: border-color 0.2s, color 0.2s;
+}
+.dashboard-screen .brand-link:hover {
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+
+/* Uniform header buttons (.hdr-btn) — all the same height/padding/font */
+.dashboard-screen .hero-actions .hdr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  background: rgba(228, 226, 201, 0.04);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  margin: 0;
+  width: auto;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.dashboard-screen .hero-actions .hdr-btn:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.dashboard-screen .hero-actions .hdr-btn--primary {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+.dashboard-screen .hero-actions .hdr-btn--primary:hover {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: var(--bg);
+}
+
+/* Push the topbar text to the right of the brand-link */
+.dashboard-screen .operator-topbar > .hero-fade {
+  margin-left: 110px;
+}
+
+@media (max-width: 900px) {
+  .dashboard-screen .brand-link {
+    height: 32px;
+    font-size: 14px;
+    padding: 0 10px;
+  }
+  .dashboard-screen .operator-topbar > .hero-fade {
+    margin-left: 96px;
+  }
+  .dashboard-screen .hero-actions .hdr-btn {
+    height: 30px;
+    min-height: 30px;
+    font-size: 10px;
+    padding: 0 10px;
+  }
+}
+@media (max-width: 600px) {
+  .dashboard-screen .brand-link {
+    position: relative;
+    left: auto;
+    top: auto;
+    margin: 0 14px 8px;
+  }
+  .dashboard-screen .operator-topbar > .hero-fade {
+    margin-left: 0;
+  }
+}
