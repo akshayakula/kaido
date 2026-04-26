@@ -1,10 +1,30 @@
 import { Redis } from '@upstash/redis';
 import { createSessionWithId, normalizeSession } from './simulation';
-import type { DemoSession, SessionSummary } from './types';
+import type { AgentEvent, DataCenterAgent, DemoSession, GridState, SessionSummary } from './types';
 
 const SESSION_TTL_SECONDS = 60 * 60 * 4;
 const ACTIVE_KEY = 'sessions:active';
+const EVENTS_CAP = 500;
+const TICK_LOCK_SECONDS = 5;
 export const DEFAULT_SESSION_ID = 'default';
+
+const metaKey = (id: string) => `session:${id}:meta`;
+const gridKey = (id: string) => `session:${id}:grid`;
+const dcsKey = (id: string) => `session:${id}:dcs`;
+const eventsKey = (id: string) => `session:${id}:events`;
+const tickLockKey = (id: string) => `session:${id}:tick:lock`;
+const legacyKey = (id: string) => `session:${id}:state`;
+
+type MetaBlob = {
+  id: string;
+  label: string;
+  createdAt: number;
+  updatedAt: number;
+  tick: number;
+  running: boolean;
+  scenario: DemoSession['scenario'];
+  site: DemoSession['site'];
+};
 
 function normalizeUpstashUrl(raw: string | undefined): string | null {
   if (!raw) return null;
@@ -38,101 +58,63 @@ export type SessionStoreHealth = {
   error?: string;
 };
 
-export async function getSessionStoreHealth(): Promise<SessionStoreHealth> {
-  const host = getUpstashHost();
-  if (!redis) {
-    return { configured: false, mode: 'unconfigured', ok: false, host };
-  }
-
-  try {
-    const key = `session-store-health:${crypto.randomUUID().slice(0, 10)}`;
-    const ping = await redis.ping();
-    await redis.set(key, { ok: true, at: Date.now() }, { ex: 60 });
-    const roundTrip = await redis.get<{ ok: boolean; at: number }>(key);
-    const activeSessions = await redis.zcard(ACTIVE_KEY).catch(() => undefined);
-    return {
-      configured: true,
-      mode: 'upstash',
-      ok: ping === 'PONG' && roundTrip?.ok === true,
-      host,
-      ping,
-      roundTrip: roundTrip?.ok === true,
-      activeSessions,
-    };
-  } catch (error) {
-    return {
-      configured: true,
-      mode: 'unreachable',
-      ok: false,
-      host,
-      error: error instanceof Error ? error.message : 'Unknown Upstash error',
-    };
-  }
-}
-
-export async function saveSession(session: DemoSession) {
-  session.updatedAt = Date.now();
-  if (!redis) {
-    throw new Error('Upstash Redis not configured: set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN');
-  }
-  await redis.set(sessionKey(session.id), session, { ex: SESSION_TTL_SECONDS });
-  await redis.zadd(ACTIVE_KEY, { score: session.updatedAt, member: session.id });
-}
-
-export async function getSession(id: string) {
-  if (!redis) return null;
-  const session = await redis.get<DemoSession>(sessionKey(id));
-  if (!session) return null;
-  return normalizeSession(session);
-}
-
-export async function getOrCreateDefaultSession() {
-  const existing = await getSession(DEFAULT_SESSION_ID);
-  if (existing) return existing;
-  const session = createSessionWithId(DEFAULT_SESSION_ID);
-  await saveSession(session);
-  return session;
-}
-
-export async function listSessions(): Promise<SessionSummary[]> {
-  if (!redis) return [];
-  const cutoff = Date.now() - SESSION_TTL_SECONDS * 1000;
-  await redis.zremrangebyscore(ACTIVE_KEY, 0, cutoff);
-  const ids = await redis.zrange<string[]>(ACTIVE_KEY, 0, -1, { rev: true });
-  const sessions = await Promise.all(ids.map((id) => getSession(id)));
-  return sessions.filter(Boolean).map((session) => summarize(session as DemoSession));
-}
-
-export async function updateSession(id: string, updater: (session: DemoSession) => void | Promise<void>) {
-  const session = await getSession(id);
-  if (!session) return null;
-  await updater(session);
-  await saveSession(session);
-  return session;
-}
-
-export function summarize(session: DemoSession): SessionSummary {
+function splitMeta(session: DemoSession): MetaBlob {
   return {
     id: session.id,
     label: session.label,
-    locationName: `${session.site.name}, ${session.site.region}`,
-    health: session.grid.health,
-    participantCount: session.datacenters.length,
+    createdAt: session.createdAt,
     updatedAt: session.updatedAt,
+    tick: session.tick,
+    running: session.running,
+    scenario: session.scenario,
+    site: session.site,
   };
 }
 
-function sessionKey(id: string) {
-  return `session:${id}:state`;
+function assemble(meta: MetaBlob, grid: GridState | null, dcs: DataCenterAgent[], events: AgentEvent[]): DemoSession {
+  return normalizeSession({
+    ...meta,
+    grid: grid ?? ({ } as GridState),
+    datacenters: dcs,
+    events,
+  });
 }
 
-function getUpstashHost() {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  if (!url) return null;
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return 'invalid-url';
+export async function getSession(id: string): Promise<DemoSession | null> {
+  if (!redis) return null;
+
+  const pipe = redis.pipeline();
+  pipe.get<MetaBlob>(metaKey(id));
+  pipe.get<GridState>(gridKey(id));
+  pipe.hgetall<Record<string, DataCenterAgent>>(dcsKey(id));
+  pipe.lrange<AgentEvent>(eventsKey(id), 0, -1);
+  const [meta, grid, dcsHash, events] = (await pipe.exec()) as [
+    MetaBlob | null,
+    GridState | null,
+    Record<string, DataCenterAgent> | null,
+    AgentEvent[] | null,
+  ];
+
+  if (meta) {
+    const dcs = dcsHash ? Object.values(dcsHash) : [];
+    return assemble(meta, grid, dcs, events ?? []);
   }
+
+  // One-shot migration from legacy `session:{id}:state` blob.
+  const legacy = await redis.get<DemoSession>(legacyKey(id));
+  if (!legacy) return null;
+  const normalized = normalizeSession(legacy);
+  await commitSession(id, normalized, {
+    meta: true,
+    grid: true,
+    dcIdsToWrite: normalized.datacenters.map((dc) => dc.id),
+    eventsToAppend: normalized.events,
+    bumpActive: true,
+  });
+  await redis.del(legacyKey(id));
+  return normalized;
 }
 
+export async function getDefaultSession(): Promise<DemoSession | null> {
+  return getSession(DEFAULT_SESSION_ID);
+}
