@@ -1822,8 +1822,10 @@ h2 {
 .dashboard-screen .operator-topbar h1 {
   margin-top: 4px;
   font-size: clamp(42px, 5.7vw, 86px);
-  line-height: 0.78;
+  line-height: 1.04;     /* was 0.78 — was clipping descenders */
+  padding-bottom: 6px;   /* extra room for "g/p/y" tails */
   text-shadow: 0 0 28px rgba(23, 23, 15, 0.72);
+  overflow: visible;
 }
 
 .dashboard-screen .hero-copy {
@@ -1860,12 +1862,23 @@ h2 {
   left: 18px;
   top: 156px;
   z-index: 8;
-  width: min(300px, calc(100vw - 36px));
+  width: min(360px, calc(100vw - 36px));
   margin: 0;
   padding: 10px;
   border: 1px solid rgba(228, 226, 201, 0.18);
   background: rgba(23, 23, 15, 0.5);
   backdrop-filter: blur(14px);
+  overflow: hidden;          /* contain the select etc. */
+}
+
+.dashboard-screen .globe-panel > .panel-head select,
+.dashboard-screen .globe-panel > .panel-head input,
+.dashboard-screen .globe-panel > .panel-head button {
+  max-width: 100%;
+  min-width: 0;              /* lets flex children actually shrink */
+  width: 100%;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .dashboard-screen .globe-panel h2,
@@ -1976,6 +1989,8 @@ h2 {
 .dashboard-screen .status-card b {
   margin: 6px 0;
   font-size: 32px;
+  line-height: 1.1;     /* avoid descender clip */
+  padding-bottom: 2px;
 }
 
 .dashboard-screen .metric {
@@ -2086,6 +2101,15 @@ h2 {
   padding: 10px;
   background: rgba(8, 9, 6, 0.34);
   box-shadow: 0 18px 70px rgba(0, 0, 0, 0.34);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;          /* clip the inner pre when there's not enough room */
+  min-height: 0;
+}
+
+.dashboard-screen .terminal-panel .dss-commands {
+  flex: 1 1 auto;
+  min-height: 0;             /* lets the pre actually shrink inside flex */
 }
 
 .dashboard-screen .terminal-panel .panel-head {
@@ -2130,6 +2154,7 @@ h2 {
 
 .dashboard-screen .terminal-panel .dss-commands {
   max-height: 130px;
+  overflow: auto;            /* scroll inside the terminal pre block */
   padding: 0;
   border: 0;
   background: transparent;
@@ -2277,6 +2302,20 @@ h2 {
   }
 }
 
+/* Universal: prevent layout-breaking long words/IDs in cards */
+.dashboard-screen .panel,
+.dashboard-screen .status-card,
+.dashboard-screen .agent-list,
+.dashboard-screen .event-list,
+.dashboard-screen .terminal-panel,
+.sensor-screen,
+.sensor-card,
+.sensor-events {
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 /* ===========================================================
    Grid sensor view (/grid-sensor)
    =========================================================== */
@@ -2303,6 +2342,8 @@ h2 {
   font-size: 30px;
   font-weight: 800;
   letter-spacing: 0.01em;
+  line-height: 1.15;       /* avoid descender clip on "Field telemetry…" */
+  padding-bottom: 2px;
 }
 .sensor-topbar p {
   margin: 0;
@@ -2540,8 +2581,12 @@ h2 {
   max-height: 320px;
   overflow-y: auto;
 }
+.sensor-events {
+  overflow-x: auto;            /* let the table scroll horizontally on narrow widths */
+}
 .sensor-events table {
   width: 100%;
+  min-width: 560px;            /* keep columns legible; horizontal scroll if not */
   border-collapse: collapse;
   font-size: 11px;
 }
@@ -2566,8 +2611,22 @@ h2 {
 @media (max-width: 760px) {
   .sensor-screen { padding: 18px; gap: 20px; }
   .sensor-topbar { flex-direction: column; }
+  .sensor-topbar h1 { font-size: 22px; }
   .sensor-grid--zones, .sensor-grid--devices { grid-template-columns: 1fr; }
   .sensor-components { grid-template-columns: repeat(3, 1fr); }
+  .sensor-card header { flex-direction: column; align-items: flex-start; }
+  .sensor-card__big { font-size: 36px; }
+  .sensor-telemetry { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 480px) {
+  .sensor-screen { padding: 12px; gap: 16px; }
+  .sensor-card { padding: 12px; }
+  .sensor-components { grid-template-columns: repeat(2, 1fr); gap: 4px; }
+  .sensor-telemetry { grid-template-columns: 1fr; }
+  .sensor-pill { font-size: 9px; padding: 3px 8px; }
+  .sensor-events table { min-width: 460px; }
+  .sensor-flag { font-size: 9px; padding: 2px 6px; }
 }
 
 /* Phone — single-column scrollable dashboard */
