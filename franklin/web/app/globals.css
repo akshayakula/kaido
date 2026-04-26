@@ -2782,3 +2782,49 @@ h2 {
 .dashboard-screen .diagnostics-stack.fp-card { padding-top: 4px; }
 .dashboard-screen .diagnostics-bottom.fp-card { padding-top: 4px; }
 .dashboard-screen .terminal-panel.fp-card { padding-top: 4px; }
+
+/* Prominent join CTA in dashboard topbar */
+.dashboard-screen .hero-actions .join-cta {
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 8px 14px;
+  border: 1px solid var(--text);
+  white-space: nowrap;
+}
+.dashboard-screen .hero-actions .join-cta:hover {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: var(--bg);
+}
+
+@media (max-width: 900px) {
+  .dashboard-screen .hero-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .dashboard-screen .hero-actions .secondary-link {
+    font-size: 11px;
+  }
+  .dashboard-screen .hero-actions .join-cta {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+}
+@media (max-width: 600px) {
+  .dashboard-screen .hero-actions {
+    position: relative;       /* override the absolute right-pin from earlier rule */
+    right: auto;
+    top: auto;
+    margin-top: 8px;
+    width: 100%;
+    justify-content: stretch;
+  }
+  .dashboard-screen .hero-actions .join-cta {
+    flex: 1;
+    text-align: center;
+  }
+}

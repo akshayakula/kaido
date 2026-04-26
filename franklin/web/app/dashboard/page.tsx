@@ -235,7 +235,8 @@ export default function DashboardPage() {
         </div>
         <div className="hero-actions">
           <a className="secondary-link" href="/readouts">Readouts</a>
-          <a className="secondary-link" href="/join">Join page</a>
+          <a className="secondary-link" href="/grid-sensor">Grid sensors</a>
+          <a className="primary-link join-cta" href="/join">Join as data center →</a>
         </div>
       </header>
 
