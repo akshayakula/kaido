@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import type { FeatureCollection, GeoJsonProperties, Geometry } from 'geojson';
 import type { DemoSession } from '@/lib/types';
@@ -49,9 +49,6 @@ const POPULATED_LIGHTS: [number, number][] = [
 export function GridMap({ session }: GridMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const [labelPositions, setLabelPositions] = useState<
-    Record<string, { labelX: number; labelY: number; pointX: number; pointY: number; side: 'left' | 'right' }>
-  >({});
 
   const view = useMemo(() => {
     if (!session) return null;
@@ -91,11 +88,13 @@ export function GridMap({ session }: GridMapProps) {
       container: containerRef.current,
       style: {
         version: 8,
+        glyphs: 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf',
         sources: {
           countries: { type: 'vector', url: 'mapbox://mapbox.country-boundaries-v1' },
           lights: emptyGeoJsonSource(),
           flows: emptyGeoJsonSource(),
           cylinders: emptyGeoJsonSource(),
+          labels: emptyGeoJsonSource(),
           site: emptyGeoJsonSource(),
         },
         layers: [
@@ -159,6 +158,25 @@ export function GridMap({ session }: GridMapProps) {
             source: 'cylinders',
             paint: { 'line-color': ['get', 'color'], 'line-width': 1, 'line-opacity': 0.8 },
           },
+          {
+            id: 'dc-labels',
+            type: 'symbol',
+            source: 'labels',
+            layout: {
+              'text-field': ['get', 'label'],
+              'text-size': 12,
+              'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+              'text-offset': [0, -1.8],
+              'text-anchor': 'bottom',
+              'text-allow-overlap': true,
+            },
+            paint: {
+              'text-color': ['get', 'color'],
+              'text-halo-color': '#202017',
+              'text-halo-width': 1.4,
+              'text-opacity': 0.95,
+            },
+          },
         ],
       },
       center: [view.center.lng, view.center.lat],
@@ -198,7 +216,6 @@ export function GridMap({ session }: GridMapProps) {
       if (!interacting) {
         const centerNow = map.getCenter();
         map.jumpTo({ center: [centerNow.lng + dt * 2.2, centerNow.lat] });
-        setLabelPositions(projectLabelPositions(map, view));
       }
       frame = window.requestAnimationFrame(spin);
     };
@@ -226,11 +243,8 @@ export function GridMap({ session }: GridMapProps) {
     map.on('pitchend', resume);
     map.on('touchend', resume);
     map.on('mouseup', resume);
-    map.on('move', () => setLabelPositions(projectLabelPositions(map, view)));
-    map.on('resize', () => setLabelPositions(projectLabelPositions(map, view)));
 
     mapRef.current = map;
-    setLabelPositions(projectLabelPositions(map, view));
     return () => {
       if (resumeTimer != null) window.clearTimeout(resumeTimer);
       window.cancelAnimationFrame(frame);
@@ -242,10 +256,7 @@ export function GridMap({ session }: GridMapProps) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !view) return;
-    if (map.isStyleLoaded()) {
-      updateMapSources(map, view);
-      setLabelPositions(projectLabelPositions(map, view));
-    }
+    if (map.isStyleLoaded()) updateMapSources(map, view);
   }, [view]);
 
   if (!session || !view) {
@@ -261,45 +272,21 @@ export function GridMap({ session }: GridMapProps) {
   return (
     <div className="franklin-globe-grid mapbox-globe-grid" data-health={session.grid.health}>
       <div className="mapbox-globe-canvas" ref={containerRef} aria-label="Mapbox globe with data-center cylinders" />
-      <svg className="map-leaders" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        {view.nodes.map((node) => {
-          const position = labelPositions[node.dc.id];
-          if (!position) return null;
-          const endX = position.side === 'left' ? position.labelX + 10 : position.labelX - 10;
-          return (
-            <g key={node.dc.id} className={node.drawClass}>
-              <line
-                x1={position.pointX}
-                y1={position.pointY}
-                x2={endX}
-                y2={position.labelY}
-              />
-              <circle cx={position.pointX} cy={position.pointY} r="0.42" />
-            </g>
-          );
-        })}
-      </svg>
       <div className="site-card franklin-site-card">
         <span>Grid agent</span>
         <b>{systemTone}</b>
         <small>{session.site.name} · {session.site.region}</small>
       </div>
-      {view.nodes.map((node) => (
-        <div
-          className={`dc-map-node anchored ${node.drawClass}`}
-          key={node.dc.id}
-          style={{
-            left: `${labelPositions[node.dc.id]?.labelX ?? 50}%`,
-            top: `${labelPositions[node.dc.id]?.labelY ?? 50}%`,
-            opacity: labelPositions[node.dc.id] ? 1 : 0,
-          }}
-          data-side={labelPositions[node.dc.id]?.side ?? 'right'}
-        >
-          <span>DC {node.index + 1} · {node.dc.name}</span>
-          <b>{node.queueLabel}</b>
-          <small>{node.dc.queueDepth} queued · {node.dc.slurm?.pendingJobs ?? 0} pending</small>
-        </div>
-      ))}
+      <div className="cylinder-readout">
+        <div className="readout-title">Cylinder live read</div>
+        {view.nodes.map((node) => (
+          <div className={`readout-row ${node.drawClass}`} key={node.dc.id}>
+            <b>DC {node.index + 1}</b>
+            <span>{node.dc.name}</span>
+            <small>{node.queueLabel} · {node.dc.queueDepth} queued · {node.dc.slurm?.pendingJobs ?? 0} pending · {Math.round(node.draw * 100)}% draw</small>
+          </div>
+        ))}
+      </div>
       <div className="map-legend">
         <span><i className="legend-dot low" /> light draw</span>
         <span><i className="legend-dot medium" /> rising draw</span>
@@ -352,6 +339,20 @@ function updateMapSources(map: mapboxgl.Map, view: GridView) {
       },
     })),
   });
+  setSource(map, 'labels', {
+    type: 'FeatureCollection',
+    features: view.nodes.map((node) => ({
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: [node.lng, node.lat],
+      },
+      properties: {
+        color: node.color,
+        label: `DC ${node.index + 1}`,
+      },
+    })),
+  });
 }
 
 function setSource(map: mapboxgl.Map, id: string, data: FeatureCollection<Geometry, GeoJsonProperties>) {
@@ -383,24 +384,4 @@ function arcCoordinates(from: [number, number], to: [number, number]) {
     ]);
   }
   return coords;
-}
-
-function projectLabelPositions(map: mapboxgl.Map, view: GridView) {
-  const canvas = map.getCanvas();
-  const width = canvas.clientWidth || 1;
-  const height = canvas.clientHeight || 1;
-  const positions: Record<string, { labelX: number; labelY: number; pointX: number; pointY: number; side: 'left' | 'right' }> = {};
-  view.nodes.forEach((node, index) => {
-    const point = map.project([node.lng, node.lat]);
-    const side = index % 2 === 0 ? -1 : 1;
-    const lane = Math.floor(index / 2);
-    positions[node.dc.id] = {
-      labelX: side < 0 ? 16 : 84,
-      labelY: Math.max(17, Math.min(82, 24 + lane * 15 + (side > 0 ? 6 : 0))),
-      pointX: Math.max(0, Math.min(100, (point.x / width) * 100)),
-      pointY: Math.max(0, Math.min(100, (point.y / height) * 100)),
-      side: side < 0 ? 'left' : 'right',
-    };
-  });
-  return positions;
 }
