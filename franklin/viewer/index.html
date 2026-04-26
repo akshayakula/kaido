@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>franklin · sam-audio</title>
+<style>
+  :root {
+    --bg: #07070a;
+    --bg2: #0e0e14;
+    --panel: #14141d;
+    --panel2: #1a1a25;
+    --border: #25253a;
+    --fg: #e7e7ee;
+    --muted: #6a6a78;
+    --accent: #ffb454;
+    --input: #94a3b8;
+    --target: #34d399;
+    --residual: #60a5fa;
+    --health: #a3a3b2;
+    --fault: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+  body { display: grid; grid-template-columns: 280px 1fr; height: 100vh; overflow: hidden; }
+
+  /* ===== Sidebar ===== */
+  aside { background: var(--bg2); border-right: 1px solid var(--border); overflow-y: auto;
+    display: flex; flex-direction: column; }
+  aside header { padding: 18px 18px 14px; border-bottom: 1px solid var(--border); }
+  aside header h1 { margin: 0 0 4px; font-size: 14px; font-weight: 700; letter-spacing: .04em; }
+  aside header p { margin: 0; color: var(--muted); font-size: 11px; }
+  .source-list { margin-top: 10px; max-height: 240px; overflow-y: auto;
+    border: 1px solid var(--border); border-radius: 4px; padding: 4px; }
+  .source-list .src-item { padding: 6px 8px; cursor: pointer; border-radius: 3px;
+    display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .source-list .src-item:hover { background: var(--panel); }
+  .source-list .src-item.active { color: var(--accent); background: rgba(255,180,84,.08); }
+  .source-list .src-item .count { color: var(--muted); font-size: 10px; }
+  .upload {
+    margin-top: 10px; padding: 14px; border: 1px dashed var(--border);
+    border-radius: 6px; text-align: center; cursor: pointer; color: var(--muted);
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .upload.drag, .upload:hover { border-color: var(--accent); color: var(--accent); background: rgba(255,180,84,.04); }
+  .upload input { display: none; }
+  .upload .small { display: block; font-size: 10px; opacity: .7; margin-top: 4px; }
+  .run-bar {
+    padding: 10px 18px; display: flex; gap: 8px; align-items: center;
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+  }
+  .run-bar button {
+    background: var(--accent); color: #000; border: 0; padding: 6px 12px;
+    font: inherit; font-weight: 600; cursor: pointer; border-radius: 4px;
+  }
+  .run-bar button:disabled { opacity: .4; cursor: not-allowed; }
+  .run-bar select { background: var(--panel); color: var(--fg); border: 1px solid var(--border);
+    padding: 6px 8px; font: inherit; border-radius: 4px; }
+  .progress-drawer {
+    position: fixed; right: 14px; bottom: 14px; width: 480px; max-height: 60vh;
+    background: var(--panel); border: 1px solid var(--accent); border-radius: 8px;
+    display: none; flex-direction: column; z-index: 50;
+    box-shadow: 0 14px 40px rgba(0,0,0,.6);
+  }
+  .progress-drawer.open { display: flex; }
+  .progress-drawer .head { padding: 10px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px; }
+  .progress-drawer .head .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 8px var(--accent); animation: pulse 1.4s infinite; }
+  .progress-drawer.done .head .dot { background: var(--target); box-shadow: 0 0 8px var(--target); animation: none; }
+  .progress-drawer.error .head .dot { background: var(--fault); box-shadow: 0 0 8px var(--fault); animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+  .progress-drawer pre { margin: 0; padding: 10px 14px; flex: 1; overflow-y: auto;
+    font-size: 11px; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+  .progress-drawer pre .stdout { color: var(--fg); }
+  .progress-drawer pre .error { color: var(--fault); }
+  .progress-drawer .close { margin-left: auto; background: transparent; border: 0;
+    color: var(--muted); cursor: pointer; font-size: 14px; }
+
+  .group { padding: 12px 0; }
+  .group h2 { margin: 0; padding: 6px 18px; font-size: 10px; font-weight: 600;
+    color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+  .group h2.fault { color: var(--fault); }
+  .group h2.health { color: var(--health); }
+  .prompt {
+    padding: 6px 18px; cursor: pointer; display: flex; flex-direction: column; gap: 1px;
+    border-left: 2px solid transparent;
+  }
+  .prompt:hover { background: var(--panel); }
+  .prompt.active { background: rgba(255,180,84,.08); border-left-color: var(--accent); }
+  .prompt .text { color: var(--fg); }
+  .prompt .cls  { color: var(--muted); font-size: 10px; }
+  .prompt.active .text { color: var(--accent); }
+
+  /* ===== Main ===== */
+  main { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; overflow: hidden; }
+  .topbar { padding: 14px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .topbar .title { font-size: 14px; }
+  .topbar .title strong { color: var(--accent); }
+  .topbar .title small { color: var(--muted); margin-left: 10px; }
+  .topbar .controls { display: flex; gap: 8px; }
+  .topbar button {
+    background: transparent; color: var(--fg); border: 1px solid var(--border);
+    padding: 6px 12px; cursor: pointer; font: inherit; border-radius: 4px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .topbar button:hover { border-color: var(--accent); color: var(--accent); }
+  .topbar button.primary { background: var(--accent); color: #000; border-color: var(--accent); }
+  .topbar button.primary:hover { filter: brightness(1.1); color: #000; }
+  .topbar kbd { background: var(--panel2); border: 1px solid var(--border); border-radius: 3px;
+    padding: 1px 6px; font-size: 10px; color: var(--muted); }
+
+  .stack { padding: 18px 22px; overflow-y: auto; display: grid; gap: 14px;
+    grid-auto-rows: minmax(0, 1fr); }
+  .lane {
+    position: relative; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px 8px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .lane.input    { border-color: rgba(148,163,184,.35); }
+  .lane.target   { border-color: rgba(52,211,153,.35); }
+  .lane.residual { border-color: rgba(96,165,250,.35); }
+  .lane header { display: flex; align-items: center; justify-content: space-between; }
+  .lane header .name { font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  .lane.input    header .name { color: var(--input); }
+  .lane.target   header .name { color: var(--target); }
+  .lane.residual header .name { color: var(--residual); }
+  .lane header .meta { color: var(--muted); font-size: 10px; }
+  .ws-wave { width: 100%; }
+  .ws-spec { width: 100%; }
+
+  /* ===== Bottom transport ===== */
+  .transport { border-top: 1px solid var(--border); padding: 10px 22px;
+    display: flex; align-items: center; gap: 18px; background: var(--bg2); }
+  .transport .time { color: var(--muted); min-width: 110px; }
+  .transport .seek { flex: 1; height: 6px; border-radius: 3px; background: var(--panel2);
+    cursor: pointer; position: relative; overflow: hidden; }
+  .transport .seek .fill { height: 100%; background: var(--accent); width: 0%; }
+  .transport .vol { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .transport .vol input { accent-color: var(--accent); }
+
+  .empty { color: var(--muted); padding: 40px; text-align: center; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<aside>
+  <header>
+    <h1>franklin</h1>
+    <p>SAM-Audio · transformer fault isolation</p>
+    <label class="upload" id="upload">
+      drop audio or click
+      <span class="small">wav/mp3/m4a · uploads to GPU</span>
+      <input type="file" id="upload-input" accept="audio/*">
+    </label>
+    <div class="source-list" id="source-list"></div>
+  </header>
+  <div class="run-bar">
+    <select id="model-select" title="model">
+      <option value="facebook/sam-audio-small">small</option>
+      <option value="facebook/sam-audio-base">base</option>
+      <option value="facebook/sam-audio-large">large</option>
+    </select>
+    <button id="run-btn">▶ run all 23</button>
+  </div>
+  <nav id="prompts"></nav>
+</aside>
+
+<main>
+  <div class="topbar">
+    <div class="title">
+      <strong id="cur-prompt">—</strong>
+      <small id="cur-cls">—</small>
+    </div>
+    <div class="controls">
+      <button id="play-input">▸ input</button>
+      <button id="play-target" class="primary">▸ target</button>
+      <button id="play-residual">▸ residual</button>
+      <button id="play-all">▶ all sync</button>
+      <span style="color:var(--muted);margin-left:8px"><kbd>space</kbd> all · <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> solo</span>
+    </div>
+  </div>
+
+  <div class="stack" id="stack"></div>
+
+  <div class="transport">
+    <div class="time"><span id="t-cur">0:00.0</span> / <span id="t-tot">0:00.0</span></div>
+    <div class="seek" id="seek"><div class="fill" id="seek-fill"></div></div>
+    <div class="vol">vol <input type="range" id="vol" min="0" max="1" step="0.01" value="0.9"></div>
+  </div>
+</main>
+
+<div class="progress-drawer" id="progress">
+  <div class="head">
+    <div class="dot"></div>
+    <div id="progress-title">job</div>
+    <button class="close" id="progress-close">×</button>
+  </div>
+  <pre id="progress-log"></pre>
+</div>
+
+<script type="module">
+import WaveSurfer from 'https://esm.sh/wavesurfer.js@7.10.1';
+import Spectrogram from 'https://esm.sh/wavesurfer.js@7.10.1/dist/plugins/spectrogram.esm.js';
+
+const HEALTH = [
+  ["transformer hum",      "core_magnetostriction"],
+  ["electrical hum",       "core_magnetostriction"],
+  ["low frequency drone",  "core_120hz_harmonic"],
+  ["60 hz hum",            "core_fundamental"],
+  ["cooling fan",          "fan_normal"],
+];
+const FAULTS = [
+  ["popping",              "partial_discharge",        "Partial discharge / arcing"],
+  ["electrical pop",       "partial_discharge",        "Partial discharge / arcing"],
+  ["crackling",            "partial_discharge_corona", "Partial discharge / arcing"],
+  ["arcing",               "arcing",                   "Partial discharge / arcing"],
+  ["electrical zap",       "arcing",                   "Partial discharge / arcing"],
+  ["zap",                  "arcing",                   "Partial discharge / arcing"],
+  ["snapping",             "spark_gap",                "Partial discharge / arcing"],
+  ["clicking",             "tap_changer_mechanical",   "Mechanical wear"],
+  ["clunking",             "tap_changer_wear",         "Mechanical wear"],
+  ["rattling",             "loose_lamination",         "Mechanical wear"],
+  ["buzzing",              "loose_winding_or_corona",  "Mechanical wear"],
+  ["pump cavitation",      "oil_pump_cavitation",      "Cooling / oil"],
+  ["water dripping",       "oil_leak",                 "Cooling / oil"],
+  ["hissing",              "gas_leak_or_bushing",      "Cooling / oil"],
+  ["wind",                 "ambient_subtract",         "Ambient (subtract)"],
+  ["traffic",              "ambient_subtract",         "Ambient (subtract)"],
+  ["birds",                "ambient_subtract",         "Ambient (subtract)"],
+  ["speech",               "ambient_subtract",         "Ambient (subtract)"],
+];
+const ALL_PROMPTS = [...HEALTH.map(r => r[0]), ...FAULTS.map(r => r[0])];
+const safe = p => p.replace(/ /g, "_").replace(/\//g, "-");
+const fmt = s => `${Math.floor(s/60)}:${(s%60).toFixed(1).padStart(4,"0")}`;
+
+let sources = [];           // [{name, files}]
+let curSource = null;
+let curPrompt = HEALTH[0][0];
+let curCls    = HEALTH[0][1];
+let lanes = {};
+let syncing = false;
+
+function buildSidebar(){
+  const root = document.getElementById("prompts");
+  root.innerHTML = "";
+
+  const hg = document.createElement("section"); hg.className = "group";
+  hg.innerHTML = `<h2 class="health">health · expected</h2>`;
+  for (const [p,c] of HEALTH) hg.appendChild(promptEl(p,c,"health"));
+  root.appendChild(hg);
+
+  const grouped = {};
+  for (const [p,c,cat] of FAULTS) (grouped[cat] ||= []).push([p,c]);
+  for (const [cat, items] of Object.entries(grouped)){
+    const g = document.createElement("section"); g.className = "group";
+    g.innerHTML = `<h2 class="fault">${cat}</h2>`;
+    for (const [p,c] of items) g.appendChild(promptEl(p,c,"fault"));
+    root.appendChild(g);
+  }
+}
+
+function promptEl(prompt, cls, kind){
+  const d = document.createElement("div"); d.className = "prompt"; d.dataset.prompt = prompt;
+  d.innerHTML = `<span class="text">${prompt}</span><span class="cls">${cls}</span>`;
+  d.addEventListener("click", () => selectPrompt(prompt, cls));
+  return d;
+}
+
+function buildStack(){
+  const stack = document.getElementById("stack");
+  stack.innerHTML = "";
+  for (const role of ["input","target","residual"]){
+    const lane = document.createElement("div"); lane.className = `lane ${role}`;
+    lane.innerHTML = `
+      <header>
+        <div class="name">${role}</div>
+        <div class="meta" id="meta-${role}">—</div>
+      </header>
+      <div class="ws-spec" id="spec-${role}"></div>
+      <div class="ws-wave" id="wave-${role}"></div>`;
+    stack.appendChild(lane);
+  }
+}
+
+function destroyLanes(){
+  for (const k of Object.keys(lanes)) { try { lanes[k].destroy(); } catch{} }
+  lanes = {};
+}
+
+function makeLane(role, url){
+  const colors = {
+    input:    { wave: "#94a3b8", progress: "#cbd5e1", cm: "roseus" },
+    target:   { wave: "#34d399", progress: "#a7f3d0", cm: "roseus" },
+    residual: { wave: "#60a5fa", progress: "#bfdbfe", cm: "gray"   },
+  };
+  const c = colors[role];
+  const ws = WaveSurfer.create({
+    container: `#wave-${role}`,
+    url,
+    waveColor: c.wave,
+    progressColor: c.progress,
+    cursorColor: "#ffb454",
+    cursorWidth: 2,
+    height: 56,
+    barWidth: 1,
+    barGap: 1,
+    barRadius: 1,
+    normalize: true,
+    interact: true,
+    backend: "MediaElement",
+    plugins: [
+      Spectrogram.create({
+        container: `#spec-${role}`,
+        labels: false,
+        height: 140,
+        fftSamples: 1024,
+        windowFunc: "hann",
+        scale: "mel",
+        colorMap: c.cm,
+      }),
+    ],
+  });
+  ws._role = role;
+  ws._ready = false;
+  ws.on("ready", () => {
+    ws._ready = true;
+    ws.setVolume(parseFloat(document.getElementById("vol").value));
+    const meta = document.getElementById(`meta-${role}`);
+    if (meta) meta.textContent = `${ws.getDuration().toFixed(2)}s · click to play`;
+    if (role === "target") {
+      document.getElementById("t-tot").textContent = fmt(ws.getDuration());
+    }
+  });
+  ws.on("error", err => {
+    console.error(`[${role}]`, err);
+    const meta = document.getElementById(`meta-${role}`);
+    if (meta) meta.textContent = `error: ${err.message || err}`;
+  });
+  ws.on("timeupdate", t => {
+    if (role !== "target") return;
+    document.getElementById("t-cur").textContent = fmt(t);
+    const dur = ws.getDuration() || 1;
+    document.getElementById("seek-fill").style.width = `${(t/dur)*100}%`;
+  });
+  // click the lane (anywhere) plays just that lane
+  const laneEl = document.querySelector(`#wave-${role}`).closest(".lane");
+  laneEl?.addEventListener("click", e => {
+    if (e.target.closest(".ws-spec")) return; // spectrogram clicks pass through
+    solo(role);
+  });
+  return ws;
+}
+
+async function safePlay(ws){
+  if (!ws) return;
+  if (!ws._ready) {
+    await new Promise(r => ws.once("ready", r));
+  }
+  try { await ws.play(); }
+  catch (err) { console.warn("play rejected", ws._role, err); }
+}
+
+function selectPrompt(prompt, cls){
+  curPrompt = prompt; curCls = cls;
+  document.querySelectorAll(".prompt").forEach(el => el.classList.toggle("active", el.dataset.prompt === prompt));
+  document.getElementById("cur-prompt").textContent = `"${prompt}"`;
+  document.getElementById("cur-cls").textContent = cls;
+
+  destroyLanes();
+  buildStack();
+  if (!curSource) return;
+  const base = `/work/${curSource}`;
+  const src = sources.find(s => s.name === curSource);
+  const inputName = (src?.files || []).find(f => f.startsWith("input."));
+  if (inputName) lanes.input = makeLane("input", `${base}/${inputName}`);
+  const tgtFile = (src?.files || []).find(f => f === `target__${safe(prompt)}.wav`);
+  const resFile = (src?.files || []).find(f => f === `residual__${safe(prompt)}.wav`);
+  if (tgtFile) lanes.target   = makeLane("target",   `${base}/${tgtFile}`);
+  else missingLane("target");
+  if (resFile) lanes.residual = makeLane("residual", `${base}/${resFile}`);
+  else missingLane("residual");
+}
+
+function missingLane(role){
+  const meta = document.getElementById(`meta-${role}`);
+  if (meta) meta.textContent = "no file — run inference";
+}
+
+function pauseAll(){ for (const w of Object.values(lanes)) { try { w.pause(); } catch{} } }
+async function solo(role){
+  pauseAll();
+  await safePlay(lanes[role]);
+}
+async function playAllSync(){
+  const t = lanes.target?.getCurrentTime() || 0;
+  for (const w of Object.values(lanes)) { try { w.setTime(t); } catch{} }
+  await Promise.all(Object.values(lanes).map(safePlay));
+}
+
+async function loadSources(preferred){
+  const r = await fetch("/api/sources");
+  sources = await r.json();
+  const root = document.getElementById("source-list");
+  root.innerHTML = "";
+  if (!sources.length){
+    root.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:11px">no sources yet — upload audio</div>`;
+  }
+  for (const s of sources){
+    const targetCount = s.files.filter(f => f.startsWith("target__")).length;
+    const el = document.createElement("div"); el.className = "src-item"; el.dataset.src = s.name;
+    el.innerHTML = `<span>${s.name}</span><span class="count">${targetCount}/23</span>`;
+    el.addEventListener("click", () => selectSource(s.name));
+    root.appendChild(el);
+  }
+  if (preferred && sources.find(s => s.name === preferred)) selectSource(preferred);
+  else if (sources[0]) selectSource(sources[0].name);
+}
+
+function selectSource(name){
+  curSource = name;
+  document.querySelectorAll(".src-item").forEach(el => el.classList.toggle("active", el.dataset.src === name));
+  selectPrompt(curPrompt, curCls);
+}
+
+// upload
+const upInput = document.getElementById("upload-input");
+const upZone = document.getElementById("upload");
+upZone.addEventListener("click", () => upInput.click());
+upZone.addEventListener("dragover", e => { e.preventDefault(); upZone.classList.add("drag"); });
+upZone.addEventListener("dragleave", () => upZone.classList.remove("drag"));
+upZone.addEventListener("drop", e => { e.preventDefault(); upZone.classList.remove("drag"); if (e.dataTransfer.files[0]) doUpload(e.dataTransfer.files[0]); });
+upInput.addEventListener("change", e => { if (e.target.files[0]) doUpload(e.target.files[0]); });
+
+async function doUpload(file){
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("name", file.name.replace(/\.[^.]+$/, ""));
+  const r = await fetch("/api/upload", { method: "POST", body: fd });
+  if (!r.ok){ alert("upload failed: " + await r.text()); return; }
+  const j = await r.json();
+  await loadSources(j.name);
+}
+
+// run
+document.getElementById("run-btn").addEventListener("click", async () => {
+  if (!curSource){ alert("pick or upload a source first"); return; }
+  const model = document.getElementById("model-select").value;
+  const r = await fetch("/api/run", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ name: curSource, prompts: ALL_PROMPTS, model }),
+  });
+  if (!r.ok){ alert("run failed: " + await r.text()); return; }
+  const { jobId } = await r.json();
+  watchJob(jobId);
+});
+
+function watchJob(jobId){
+  const drawer = document.getElementById("progress");
+  const log = document.getElementById("progress-log");
+  const title = document.getElementById("progress-title");
+  drawer.classList.remove("done","error"); drawer.classList.add("open");
+  log.textContent = "";
+  title.textContent = `job ${jobId} · running …`;
+
+  const es = new EventSource(`/api/jobs/${jobId}/events`);
+  es.onmessage = ev => {
+    const e = JSON.parse(ev.data);
+    const span = document.createElement("span");
+    span.className = e.kind || "log";
+    span.textContent = e.line + "\n";
+    log.appendChild(span);
+    log.scrollTop = log.scrollHeight;
+  };
+  es.addEventListener("state", ev => {
+    const { state } = JSON.parse(ev.data);
+    drawer.classList.toggle("done", state === "done");
+    drawer.classList.toggle("error", state === "error");
+    title.textContent = `job ${jobId} · ${state}`;
+    es.close();
+    if (state === "done") loadSources(curSource);
+  });
+  es.onerror = () => { /* retry handled by EventSource */ };
+}
+
+document.getElementById("progress-close").addEventListener("click", () => {
+  document.getElementById("progress").classList.remove("open");
+});
+document.getElementById("play-input").addEventListener("click", () => solo("input"));
+document.getElementById("play-target").addEventListener("click", () => solo("target"));
+document.getElementById("play-residual").addEventListener("click", () => solo("residual"));
+document.getElementById("play-all").addEventListener("click", playAllSync);
+document.getElementById("vol").addEventListener("input", e => {
+  const v = parseFloat(e.target.value);
+  for (const w of Object.values(lanes)) w.setVolume(v);
+});
+document.getElementById("seek").addEventListener("click", e => {
+  const r = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - r.left) / r.width;
+  const dur = lanes.target?.getDuration() || 0;
+  for (const w of Object.values(lanes)) w.setTime(pct * dur);
+});
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.code === "Space")        { e.preventDefault(); playAllSync(); }
+  else if (e.key === "1")        { solo("input"); }
+  else if (e.key === "2")        { solo("target"); }
+  else if (e.key === "3")        { solo("residual"); }
+  else if (e.key === "p" || e.key === "P") { pauseAll(); }
+});
+
+buildSidebar();
+loadSources();
+</script>
+</body>
+</html>

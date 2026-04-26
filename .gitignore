@@ -13,3 +13,4 @@ audio/*.log
 
 # franklin/
 franklin/work/
+franklin/.venv/
