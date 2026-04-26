@@ -5740,3 +5740,23 @@ h2 {
   .dashboard-screen.v4 .dash4-mapbg { height: 50vh; bottom: auto; }
   .fpanel__head { cursor: default; }
 }
+
+/* Default button + clean up fpanel positioning */
+.dashboard-screen.v4 .dash4-default {
+  height: 24px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(228, 226, 201, 0.18);
+  background: transparent;
+  color: var(--foreground, #e4e2c9);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-weight: 600;
+}
+.dashboard-screen.v4 .dash4-default:hover {
+  border-color: var(--tone-ok);
+  color: var(--tone-ok);
+}
+.fpanel { right: auto; bottom: auto; }

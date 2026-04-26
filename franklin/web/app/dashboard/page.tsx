@@ -131,15 +131,70 @@ export default function DashboardPage() {
   function resetLayout() {
     clearLayout();
     setLayout({ order: DEFAULT_ORDER, collapsed: {} });
+    applyDefaultPositions();
   }
 
-  // Default corner positions for floating panels (px from edges).
-  const DEFAULT_POSITIONS: Record<string, { x: number; y: number }> = {
-    opendss:  { x: 18,  y: 18 },
-    readouts: { x: -18, y: 18 },
-    a2a:      { x: -18, y: -18 },
-    join:     { x: 18,  y: -18 },
+  // Approximate panel widths/heights — used for the non-overlapping default layout.
+  const PANEL_SIZE: Record<string, { w: number; h: number }> = {
+    opendss:  { w: 420, h: 360 },
+    readouts: { w: 320, h: 320 },
+    a2a:      { w: 380, h: 480 },
+    join:     { w: 340, h: 360 },
   };
+
+  function computeDefaults(viewportW: number, viewportH: number) {
+    const M = 18;
+    const HUD_OFFSET = 64;
+    const w = viewportW;
+    const h = viewportH;
+    const opendss  = PANEL_SIZE.opendss;
+    const readouts = PANEL_SIZE.readouts;
+    const a2a      = PANEL_SIZE.a2a;
+    const join     = PANEL_SIZE.join;
+
+    return {
+      opendss:  { left: M,                                  top: HUD_OFFSET },
+      readouts: { left: Math.max(M, w - readouts.w - M),    top: HUD_OFFSET },
+      a2a:      { left: M,                                  top: Math.max(HUD_OFFSET + opendss.h + 12, h - a2a.h - M) },
+      join:     { left: Math.max(M, w - join.w - M),        top: Math.max(HUD_OFFSET + readouts.h + 12, h - join.h - M) },
+    } as Record<string, { left: number; top: number }>;
+  }
+
+  // positions live in parent state (single source of truth — drag math is simple).
+  const [positions, setPositions] = useState<Record<string, { left: number; top: number }>>({});
+  const [posHydrated, setPosHydrated] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const defaults = computeDefaults(window.innerWidth, window.innerHeight);
+    let next: Record<string, { left: number; top: number }> = { ...defaults };
+    try {
+      const raw = window.localStorage.getItem('dash4:pos:all');
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, { left: number; top: number }>;
+        next = { ...defaults, ...parsed };
+      }
+    } catch { /* ignore */ }
+    setPositions(next);
+    setPosHydrated(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!posHydrated) return;
+    try { window.localStorage.setItem('dash4:pos:all', JSON.stringify(positions)); } catch { /* ignore */ }
+  }, [positions, posHydrated]);
+
+  function applyDefaultPositions() {
+    if (typeof window === 'undefined') return;
+    const defaults = computeDefaults(window.innerWidth, window.innerHeight);
+    setPositions(defaults);
+    setLayout({ order: DEFAULT_ORDER, collapsed: {} });
+    try { window.localStorage.removeItem('dash4:pos:all'); } catch { /* ignore */ }
+  }
+
+  function setPanelPos(id: string, p: { left: number; top: number }) {
+    setPositions((prev) => ({ ...prev, [id]: p }));
+  }
 
   return (
     <main className="dashboard-screen v4">
@@ -159,17 +214,18 @@ export default function DashboardPage() {
               {scenarioOptions.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           )}
+          <button type="button" className="dash4-default" onClick={applyDefaultPositions} title="Default view (no overlap)">Default</button>
           <button type="button" className="dash4-reset" onClick={resetLayout} title="Reset layout">↺</button>
           <a className="dash4-link" href="/join">Join →</a>
         </div>
 
-        {layout.order.map((id) => {
+        {posHydrated && layout.order.map((id) => {
           const meta = panelMap[id];
           if (!meta) return null;
           const collapsed = !!layout.collapsed[id];
           const onToggle = () =>
             setLayout({ ...layout, collapsed: { ...layout.collapsed, [id]: !collapsed } });
-          const pos = DEFAULT_POSITIONS[id] ?? { x: 18, y: 18 };
+          const pos = positions[id] ?? { left: 18, top: 64 };
           return (
             <FloatingPanel
               key={id}
@@ -178,7 +234,8 @@ export default function DashboardPage() {
               title={meta.title}
               collapsed={collapsed}
               onToggle={onToggle}
-              defaultPos={pos}
+              pos={pos}
+              onPosChange={(p) => setPanelPos(id, p)}
               isDragging={dragId === id}
               onDragStart={handlers.onDragStart}
               onDragEnd={handlers.onDragEnd}
@@ -199,7 +256,8 @@ function FloatingPanel({
   title,
   collapsed,
   onToggle,
-  defaultPos,
+  pos,
+  onPosChange,
   isDragging,
   onDragStart,
   onDragEnd,
@@ -210,68 +268,51 @@ function FloatingPanel({
   title: string;
   collapsed: boolean;
   onToggle: () => void;
-  defaultPos: { x: number; y: number };
+  pos: { left: number; top: number };
+  onPosChange: (p: { left: number; top: number }) => void;
   isDragging: boolean;
   onDragStart: (id: string, rect: DOMRect) => void;
   onDragEnd: () => void;
   children: React.ReactNode;
 }) {
-  const [pos, setPos] = useState<{ x: number; y: number }>(defaultPos);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(`dash4:pos:${id}`);
-      if (raw) setPos(JSON.parse(raw));
-    } catch { /* ignore */ }
-    setHydrated(true);
-  }, [id]);
-
   function handlePointerDown(e: React.PointerEvent<HTMLElement>) {
     const target = e.target as HTMLElement;
     if (target.closest('button, input, select, textarea, a, [data-no-drag]')) return;
     e.preventDefault();
     const startX = e.clientX;
     const startY = e.clientY;
-    const startPos = { ...pos };
-    onDragStart(id, (e.currentTarget as HTMLElement).getBoundingClientRect());
+    const start = { ...pos };
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    onDragStart(id, rect);
 
     const move = (ev: PointerEvent) => {
       const dx = ev.clientX - startX;
       const dy = ev.clientY - startY;
-      // Translate using the same anchor (positive = from-left/top, negative = from-right/bottom).
       const next = {
-        x: startPos.x >= 0 ? startPos.x + dx : startPos.x + dx,
-        y: startPos.y >= 0 ? startPos.y + dy : startPos.y + dy,
+        left: start.left + dx,
+        top: start.top + dy,
       };
-      // For panels anchored to right/bottom, dragging right/down should subtract.
-      if (startPos.x < 0) next.x = startPos.x - dx;
-      if (startPos.y < 0) next.y = startPos.y - dy;
-      setPos(next);
+      // Clamp inside viewport (keep at least 40px on screen).
+      const maxLeft = window.innerWidth - 40;
+      const maxTop = window.innerHeight - 40;
+      next.left = Math.max(-rect.width + 80, Math.min(maxLeft, next.left));
+      next.top = Math.max(0, Math.min(maxTop, next.top));
+      onPosChange(next);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
       onDragEnd();
-      try { window.localStorage.setItem(`dash4:pos:${id}`, JSON.stringify(pos)); } catch { /* ignore */ }
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
   }
 
-  // Persist position when it changes.
-  useEffect(() => {
-    if (!hydrated) return;
-    try { window.localStorage.setItem(`dash4:pos:${id}`, JSON.stringify(pos)); } catch { /* ignore */ }
-  }, [pos, id, hydrated]);
-
   const style: React.CSSProperties = {
-    left: pos.x >= 0 ? pos.x : 'auto',
-    right: pos.x < 0 ? -pos.x : 'auto',
-    top: pos.y >= 0 ? pos.y : 'auto',
-    bottom: pos.y < 0 ? -pos.y : 'auto',
+    left: pos.left,
+    top: pos.top,
   };
 
   return (
