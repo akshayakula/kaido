@@ -422,6 +422,39 @@ h2 {
   outline: none;
 }
 
+.map-leaders {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.map-leaders line {
+  stroke: var(--text);
+  stroke-width: 0.18;
+  stroke-dasharray: 1 0.8;
+  opacity: 0.72;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-leaders circle {
+  fill: var(--bg);
+  stroke: var(--text);
+  stroke-width: 0.14;
+  opacity: 0.9;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-leaders g.medium line,
+.map-leaders g.medium circle {
+  stroke: var(--yellow);
+}
+
+.map-leaders g.high line,
+.map-leaders g.high circle {
+  stroke: var(--red);
+}
+
 .mapboxgl-ctrl-logo,
 .mapboxgl-ctrl-attrib,
 .mapboxgl-control-container {
@@ -669,6 +702,30 @@ h2 {
   min-width: 146px;
   padding: 9px 10px;
   transform: translate(-50%, -50%);
+}
+
+.dc-map-node.anchored {
+  z-index: 2;
+  transition: left 180ms linear, top 180ms linear, opacity 120ms ease;
+}
+
+.dc-map-node.anchored::before {
+  position: absolute;
+  top: calc(50% - 4px);
+  width: 9px;
+  height: 9px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: var(--bg);
+  content: "";
+}
+
+.dc-map-node.anchored[data-side="left"]::before {
+  right: -16px;
+}
+
+.dc-map-node.anchored[data-side="right"]::before {
+  left: -16px;
 }
 
 .dc-map-node.low {
