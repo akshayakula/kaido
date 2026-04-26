@@ -1,4 +1,6 @@
-# Franklin
+# Franklin · Electrical Grid
+
+**Akshay Akula · Puneet Velidi · Andres Cruz**
 
 > Listen to the grid. Watch it breathe.
 

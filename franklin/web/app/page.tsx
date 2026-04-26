@@ -13,7 +13,7 @@ export default function Home() {
           using cross data center agentic communication.
           <br />
           <br />
-          Lighting does strike twice.
+          Lightning does strike twice.
         </p>
         <nav>
           <a href="/join">Join as data center</a>

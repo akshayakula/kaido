@@ -61,10 +61,7 @@ const ASHBURN_DC_COORDS: Array<[number, number, string]> = [
 
 // Seed enough DCs for the dashboard to feel alive before anyone joins.
 const SEED_DATACENTERS = 4;
-// Keep a bounded session, but do not drop phone participants immediately
-// after they join. The phone page polls state and depends on its DC id
-// remaining in the shared session.
-export const MAX_DATACENTERS = 12;
+export const MAX_DATACENTERS = Infinity;
 
 export function createSessionWithId(id: string): DemoSession {
   // Pin the demo to Northern Virginia Fabric (Ashburn) — the rest of the
@@ -142,12 +139,6 @@ export function normalizeSession(session: DemoSession) {
   const nova = SITES.find((s) => s.region.startsWith('Virginia'))!;
   if (!session.site || session.site.region !== nova.region) {
     session.site = nova;
-  }
-  // Cap, but never auto-pad — operator deletes must stick. If the session
-  // somehow ends up empty, the next manual /join (or the explicit seed in
-  // createSessionWithId) will repopulate it.
-  if (session.datacenters.length > MAX_DATACENTERS) {
-    session.datacenters = session.datacenters.slice(0, MAX_DATACENTERS);
   }
   // Migrate any DC with a generic / placeholder name to the canonical
   // Ashburn-area campus name for its slot. Keeps custom display names from

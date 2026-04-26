@@ -67,23 +67,28 @@ def run(payload: Dict[str, Any]) -> Dict[str, Any]:
         f"units=km normamps={config['line_normamps']}"
     )
 
+    # 4-bus radial feeder: subbus → bus0 → bus1 → bus2 → bus3
     dss("New Line.Backbone bus1=subbus bus2=bus0 phases=3 linecode=Feeder length=0.35 units=km")
+    dss("New Line.Feeder1  bus1=bus0  bus2=bus1 phases=3 linecode=Feeder length=0.40 units=km")
+    dss("New Line.Feeder2  bus1=bus1  bus2=bus2 phases=3 linecode=Feeder length=0.35 units=km")
+    dss("New Line.Feeder3  bus1=bus2  bus2=bus3 phases=3 linecode=Feeder length=0.30 units=km")
 
     feeder_kw = 0.0
     datacenter_loads: List[Dict[str, Any]] = []
     for idx, dc in enumerate(datacenters, start=1):
-        bus = f"dc{idx}bus"
-        length_km = 0.45 + (idx % 4) * 0.18
+        feeder_bus = f"bus{(idx - 1) % 4}"  # distribute evenly across bus0..bus3
+        tap_bus = f"dc{idx}bus"
         line_name = f"DC{idx}"
-        dss(f"New Line.{line_name} bus1=bus0 bus2={bus} phases=3 linecode=Feeder length={length_km:.3f} units=km")
+        dss(f"New Line.{line_name} bus1={feeder_bus} bus2={tap_bus} phases=3 linecode=Feeder length=0.18 units=km")
         kw = datacenter_kw(dc, cooling)
         kvar = kw * 0.33
         feeder_kw += kw
-        dss(f"New Load.Load{idx} bus1={bus} phases=3 conn=wye kv=12.47 kw={kw:.3f} kvar={kvar:.3f} model=1")
+        dss(f"New Load.Load{idx} bus1={tap_bus} phases=3 conn=wye kv=12.47 kw={kw:.3f} kvar={kvar:.3f} model=1")
         datacenter_loads.append({
             "id": dc.get("id"),
             "name": dc.get("name") or f"Data Center {idx:02d}",
-            "bus": bus,
+            "bus": tap_bus,
+            "feederBus": feeder_bus,
             "kw": kw,
             "kvar": kvar,
             "requestedKw": (dc.get("gridAllocation") or {}).get("requestedKw"),
