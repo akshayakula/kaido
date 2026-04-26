@@ -48,6 +48,10 @@ TEMP_THRESHOLD_C   = float(os.environ.get("TEMP_THRESHOLD_C", "2.5"))
 STABLE_WINDOW_S    = float(os.environ.get("STABLE_WINDOW_S", "30"))
 STABLE_STDDEV_C    = float(os.environ.get("STABLE_STDDEV_C", "0.15"))
 
+# Ring renderer to use. "comet" makes Δtemp the dominant visual; "load_audio"
+# is the original 16-LED fill bar with mic flicker.
+RING_MODE          = os.environ.get("RING_MODE", "comet")
+
 
 MOCK_BASELINE_C   = float(os.environ.get("MOCK_BASELINE_C", "23.0"))
 MOCK_HUMIDITY     = float(os.environ.get("MOCK_HUMIDITY", "40.0"))
@@ -239,13 +243,18 @@ def main():
     mic_saturation_v = 0.005
     temp_threshold_c = TEMP_THRESHOLD_C
 
+    viz_temp_c = None  # latest absolute temp, for the comet renderer
+
     def render_frames(seconds):
         """Animate the ring at ~30 FPS for `seconds`, using current viz state."""
         end = time.monotonic() + seconds
         while time.monotonic() < end:
             now = time.monotonic() - start
-            ring.render_load_audio(strip, viz_delta, temp_threshold_c,
-                                   viz_stable, viz_mic_level, now)
+            if RING_MODE == "comet":
+                ring.render_comet(strip, viz_temp_c, viz_delta, viz_mic_level, now)
+            else:
+                ring.render_load_audio(strip, viz_delta, temp_threshold_c,
+                                       viz_stable, viz_mic_level, now)
             time.sleep(1.0 / 30.0)
 
     def run_recalibrate_animation(seconds=6.0):
@@ -332,6 +341,7 @@ def main():
                     temp_c, humidity = mock_read(t)
 
             samples.append(temp_c)
+            viz_temp_c = temp_c
 
             if baseline is None:
                 baseline_samples.append(temp_c)
