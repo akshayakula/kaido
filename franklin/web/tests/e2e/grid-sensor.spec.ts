@@ -8,7 +8,7 @@ test('home loads and links to grid-sensor', async ({ page }) => {
 
 test('/grid-sensor renders zones, devices, and events', async ({ page }) => {
   await page.goto('/grid-sensor');
-  await expect(page.locator('.sensor-eyebrow')).toContainText('GRID SENSOR');
+  await expect(page.locator('.sensor-eyebrow')).toContainText('FRANKLIN SENSORS');
   await expect(page.locator('h1')).toContainText('Field telemetry');
 
   // Wait for the API to fill in cards

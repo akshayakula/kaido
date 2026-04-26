@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { DeviceListItem, EventRow, ZoneScore } from '@/lib/sensor-store';
 
-const REFRESH_MS = 5000;
+const REFRESH_MS = 2000;     // poll Upstash every 2s — pi-sensor1 publishes at 0.5 Hz
 
 const STATE_TONE: Record<string, string> = {
   NORMAL: 'sensor-pill sensor-pill--normal',
@@ -13,6 +13,15 @@ const STATE_TONE: Record<string, string> = {
   OFFLINE: 'sensor-pill sensor-pill--offline',
 };
 
+// Friendly display names for known device IDs.
+const DEVICE_LABELS: Record<string, string> = {
+  'pi-sensor1': 'Franklin sensor 1',
+  'pi-load1':   'Franklin sensor (mock · healthy)',
+  'pi-load2':   'Franklin sensor (mock · stressed)',
+  'pi-load3':   'Franklin sensor (mock · failing)',
+};
+const labelFor = (id: string) => DEVICE_LABELS[id] ?? id;
+
 const fmt = (x: number | null | undefined, d = 2) =>
   x === null || x === undefined || Number.isNaN(x) ? '—' : Number(x).toFixed(d);
 const ts = (t: number) => new Date(t * 1000).toLocaleTimeString();
@@ -20,11 +29,21 @@ const healthColor = (h: number | null | undefined) =>
   h === null || h === undefined ? 'var(--muted)' :
   h > 0.85 ? 'var(--green)' : h > 0.55 ? 'var(--yellow)' : 'var(--red)';
 
+function ageString(seconds: number): { label: string; tone: 'live' | 'fresh' | 'stale' | 'cold' } {
+  if (seconds < 5)   return { label: `${seconds.toFixed(0)}s ago`, tone: 'live' };
+  if (seconds < 30)  return { label: `${seconds.toFixed(0)}s ago`, tone: 'fresh' };
+  if (seconds < 120) return { label: `${seconds.toFixed(0)}s ago`, tone: 'stale' };
+  if (seconds < 3600) return { label: `${Math.round(seconds / 60)} min ago`, tone: 'cold' };
+  return { label: `${Math.round(seconds / 3600)} h ago`, tone: 'cold' };
+}
+
 export default function GridSensorClient() {
   const [devices, setDevices] = useState<DeviceListItem[]>([]);
   const [zones, setZones] = useState<Record<string, ZoneScore>>({});
   const [events, setEvents] = useState<EventRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [lastFetched, setLastFetched] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     let alive = true;
@@ -37,13 +56,17 @@ export default function GridSensorClient() {
         ]);
         if (!alive) return;
         setDevices(d); setZones(z); setEvents(e); setError(null);
+        setLastFetched(Date.now());
       } catch (err) {
         if (alive) setError(String(err));
       }
     };
     refresh();
-    const id = setInterval(refresh, REFRESH_MS);
-    return () => { alive = false; clearInterval(id); };
+    const pollId = setInterval(refresh, REFRESH_MS);
+    // Tick a separate clock every 500ms so the "Xs ago" label updates
+    // smoothly without re-fetching from Upstash.
+    const tickId = setInterval(() => setNow(Date.now()), 500);
+    return () => { alive = false; clearInterval(pollId); clearInterval(tickId); };
   }, []);
 
   const fleetSummary = useMemo(() => {
@@ -52,16 +75,25 @@ export default function GridSensorClient() {
     return byState;
   }, [devices]);
 
+  const fetchedAge = lastFetched ? Math.max(0, (now - lastFetched) / 1000) : null;
+
   return (
     <main className="sensor-screen">
       <header className="sensor-topbar">
         <div>
-          <span className="sensor-eyebrow">FRANKLIN · GRID SENSOR</span>
+          <span className="sensor-eyebrow">FRANKLIN SENSORS</span>
           <h1>Field telemetry &amp; transformer health</h1>
           <p>
             Live fusion of <strong>thermal</strong>, <strong>acoustic</strong>, and{' '}
-            <strong>humidity</strong> signals from edge sensors. Health and state are
-            scored every 30 s by the fusion runner; this view auto-refreshes every {REFRESH_MS / 1000}s.
+            <strong>humidity</strong> signals from edge sensors. Polling Upstash every {REFRESH_MS / 1000}s.
+            {fetchedAge !== null && (
+              <>
+                {' '}
+                Last fetch <strong className={fetchedAge < 3 ? 'sensor-fresh-live' : 'sensor-fresh-stale'}>
+                  {fetchedAge.toFixed(1)}s ago
+                </strong>.
+              </>
+            )}
           </p>
         </div>
         <nav className="sensor-nav">
@@ -116,15 +148,32 @@ export default function GridSensorClient() {
             const tele = d.latest_telemetry || {} as Partial<DeviceListItem['latest_telemetry']>;
             const f = d.features || {};
             const comps = d.components || { thermal: 0, audio: 0, humidity: 0, joint: 0, stability: 0 };
+            const teleTs = (tele as any)?.ts as number | undefined;
+            const ageS = teleTs ? Math.max(0, now / 1000 - teleTs) : null;
+            const age = ageS !== null ? ageString(ageS) : null;
+            const isLive = d.device === 'pi-sensor1' || (d.profile && d.profile !== 'unknown' && d.profile !== 'healthy' && d.profile !== 'stressed' && d.profile !== 'failing');
             return (
-              <article key={d.device} className={`sensor-card sensor-card--device sensor-state-${d.state}`}>
+              <article key={d.device} className={`sensor-card sensor-card--device sensor-state-${d.state}${age ? ' freshness-' + age.tone : ''}`}>
                 <header>
                   <div>
-                    <div className="sensor-card__title">{d.device}</div>
-                    <div className="sensor-card__sub">{d.zone ?? '—'} · {d.profile ?? '—'}</div>
+                    <div className="sensor-card__title">
+                      {labelFor(d.device)}
+                      {d.device === 'pi-sensor1' && <span className="sensor-card__live-badge">LIVE</span>}
+                    </div>
+                    <div className="sensor-card__sub">
+                      <code>{d.device}</code> · {d.zone ?? '—'} · {d.profile ?? '—'}
+                    </div>
                   </div>
                   <span className={STATE_TONE[d.state] || 'sensor-pill'}>{d.state}</span>
                 </header>
+
+                {age && (
+                  <div className={`sensor-freshness sensor-freshness--${age.tone}`}>
+                    <span className="sensor-freshness__dot" aria-hidden="true" />
+                    <span>updated {age.label}</span>
+                    {teleTs && <span className="sensor-freshness__time">{ts(teleTs)}</span>}
+                  </div>
+                )}
 
                 <div className="sensor-bar sensor-bar--lg">
                   <div className="sensor-bar__fill" style={{ background: c, width: `${(d.health ?? 0) * 100}%` }} />

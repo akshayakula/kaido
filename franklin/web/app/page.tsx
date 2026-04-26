@@ -18,7 +18,7 @@ export default function Home() {
         <nav>
           <a href="/join">Join as data center</a>
           <a href="/dashboard">Live grid</a>
-          <a href="/grid-sensor">Grid sensors</a>
+          <a href="/grid-sensor">Franklin sensors</a>
         </nav>
         <p className="home-credits">
           <a href="https://www.linkedin.com/in/andrescz/" target="_blank" rel="noopener noreferrer">Andres Cruz</a>

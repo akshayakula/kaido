@@ -1376,13 +1376,62 @@ h2 {
   grid-template-columns: minmax(320px, 1fr) minmax(320px, 460px);
   align-items: center;
   gap: 32px;
+  padding: 24px 0;
 }
 
+.join-hero .eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+}
+.join-hero h1 {
+  font-size: clamp(28px, 4vw, 52px);    /* was clamp(54, 10.8vw, 168) */
+  line-height: 1.05;
+  margin-top: 8px;
+  max-width: 22ch;
+}
 .join-hero p {
-  max-width: 620px;
-  margin-top: 18px;
-  font-size: 18px;
-  line-height: 1.5;
+  max-width: 540px;
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.join-form {
+  padding: 18px;
+}
+.join-form label span {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+.join-form input {
+  font-size: 13px;
+}
+.join-form button {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+.join-form .selected-session {
+  font-size: 11px;
+}
+.join-form .secondary-link {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 760px) {
+  .join-shell {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 18px 0 24px;
+    align-items: start;
+  }
+  .join-hero h1 {
+    font-size: clamp(24px, 7vw, 38px);
+  }
+  .join-hero p {
+    font-size: 12px;
+  }
 }
 
 .join-form {
@@ -2827,4 +2876,70 @@ h2 {
     flex: 1;
     text-align: center;
   }
+}
+
+/* Freshness indicator on sensor cards */
+.sensor-freshness {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  border-top: 1px dashed rgba(228, 226, 201, 0.12);
+  border-bottom: 1px dashed rgba(228, 226, 201, 0.12);
+}
+.sensor-freshness__dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+.sensor-freshness__time {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+.sensor-freshness--live   { color: var(--target); }
+.sensor-freshness--live   .sensor-freshness__dot {
+  background: var(--target);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+  animation: sensor-pulse 1s ease-in-out infinite;
+}
+.sensor-freshness--fresh  { color: var(--cyan); }
+.sensor-freshness--fresh  .sensor-freshness__dot { background: var(--cyan); }
+.sensor-freshness--stale  { color: var(--yellow); }
+.sensor-freshness--stale  .sensor-freshness__dot { background: var(--yellow); }
+.sensor-freshness--cold   { color: var(--muted); }
+.sensor-freshness--cold   .sensor-freshness__dot { background: var(--muted); }
+
+@keyframes sensor-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(0.7); }
+}
+
+.sensor-card__live-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  background: var(--target);
+  color: var(--bg);
+  vertical-align: middle;
+}
+.sensor-card__sub code {
+  font-family: inherit;
+  background: rgba(228, 226, 201, 0.06);
+  padding: 1px 5px;
+}
+
+.sensor-fresh-live  { color: var(--target); }
+.sensor-fresh-stale { color: var(--yellow); }
+
+/* Subtle border accent for live-feed cards */
+.sensor-card--device.freshness-live {
+  border-color: rgba(52, 211, 153, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.18);
 }
