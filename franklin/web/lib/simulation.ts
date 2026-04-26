@@ -114,6 +114,21 @@ export function createDataCenter(session: DemoSession, displayName?: string): Da
 }
 
 export function normalizeSession(session: DemoSession) {
+  // Pin the site to Northern Virginia and migrate any DC that's still at
+  // a non-Ashburn coordinate (older sessions had random global coords).
+  const nova = SITES.find((s) => s.region.startsWith('Virginia'))!;
+  if (!session.site || session.site.region !== nova.region) {
+    session.site = nova;
+  }
+  session.datacenters.forEach((dc, i) => {
+    const distFromAshburn = Math.hypot(dc.lat - 39.04, dc.lng - -77.49);
+    if (distFromAshburn > 0.5) {
+      const slot = ASHBURN_DC_COORDS[i % ASHBURN_DC_COORDS.length];
+      const jitter = 0.005 * ((((i + 1) * 1103515245) % 1000) / 1000 - 0.5);
+      dc.lat = slot[0] + jitter;
+      dc.lng = slot[1] + jitter * 1.3;
+    }
+  });
   session.datacenters.forEach((dc, index) => {
     dc.slurm ??= createDefaultSlurm(dc.gpuCount, index + 1);
     dc.slurm.maxGpus = dc.gpuCount;
