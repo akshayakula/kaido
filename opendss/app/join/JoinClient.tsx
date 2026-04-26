@@ -11,12 +11,17 @@ export function JoinClient() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [displayName, setDisplayName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetch('/api/sessions')
       .then((response) => response.json())
       .then((data: { sessions: SessionSummary[] }) => {
         setSessions(data.sessions);
+        setError('');
+      })
+      .catch(() => {
+        setError('Could not load the shared grid session. Try refreshing.');
       });
   }, []);
 
@@ -24,16 +29,24 @@ export function JoinClient() {
 
   async function join() {
     setBusy(true);
+    setError('');
     try {
       const response = await fetch(`/api/sessions/${DEFAULT_SESSION_ID}/datacenters`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ displayName }),
       });
-      if (!response.ok) return;
-      const data = (await response.json()) as { sessionId: string; datacenterId: string };
+      const data = (await response.json().catch(() => ({}))) as { sessionId?: string; datacenterId?: string; error?: string };
+      if (!response.ok || !data.sessionId || !data.datacenterId) {
+        setError(data.error || 'Could not join the default grid session.');
+        return;
+      }
       window.localStorage.setItem(`dc:${data.sessionId}`, data.datacenterId);
-      router.push(`/session/${data.sessionId}/datacenter?dc=${data.datacenterId}`);
+      const destination = `/session/${data.sessionId}/datacenter?dc=${data.datacenterId}`;
+      router.push(destination);
+      window.location.assign(destination);
+    } catch {
+      setError('Network error while joining the grid session.');
     } finally {
       setBusy(false);
     }
@@ -53,6 +66,7 @@ export function JoinClient() {
           <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Data Center 07" />
         </label>
         {selected && <div className="selected-session">Default grid is {selected.health}; {selected.participantCount} data centers connected.</div>}
+        {error && <div className="form-error" role="alert">{error}</div>}
         <button onClick={join} disabled={busy}>{busy ? 'Joining...' : 'Become a data-center agent'}</button>
         <a className="secondary-link" href="/dashboard">Open dashboard</a>
       </section>

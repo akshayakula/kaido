@@ -1403,6 +1403,16 @@ h2 {
   text-transform: uppercase;
 }
 
+.form-error {
+  padding: 10px 12px;
+  border: 1px solid rgba(226, 123, 99, 0.42);
+  background: rgba(226, 123, 99, 0.08);
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
 .phone-grid {
   display: grid;
   grid-template-columns: 340px minmax(380px, 1fr) 320px;

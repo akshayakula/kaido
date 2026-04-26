@@ -19,6 +19,7 @@ type GridView = {
     drawClass: DrawClass;
     drawLabel: string;
     color: string;
+    kw: number;
     loadSignal: number;
     queuePressure: number;
     queueLabel: string;
@@ -71,7 +72,12 @@ export function GridMap({ session }: GridMapProps) {
       const relativeDraw = draw / maxDraw;
       const drawClass: DrawClass = relativeDraw > 0.72 ? 'high' : relativeDraw > 0.38 ? 'medium' : 'low';
       const queuePressure = Math.min(1, (dc.queueDepth + (dc.slurm?.pendingJobs ?? 0) * 45 + (dc.slurm?.heldJobs ?? 0) * 70) / 1800);
-      const loadSignal = Math.min(1, queuePressure * 0.6 + draw * 0.4);
+      const computeKw = dc.gpuCount * dc.gpuKw * draw;
+      const kw = Math.max(0, dc.baseKw + computeKw - dc.batterySupportKw);
+      const maxKw = Math.max(1, dc.baseKw + dc.gpuCount * dc.gpuKw * 0.95);
+      const powerPressure = Math.min(1, kw / maxKw);
+      const liveDemand = dc.queueDepth > 0 ? Math.sin((session.tick + index * 4) / 3.2) * 0.08 : 0;
+      const loadSignal = Math.max(0.08, Math.min(1, powerPressure * 0.72 + queuePressure * 0.2 + liveDemand));
       const lat = center.lat + (dc.lat - center.lat) * 18;
       const lng = center.lng + (dc.lng - center.lng) * 18;
       return {
@@ -81,6 +87,7 @@ export function GridMap({ session }: GridMapProps) {
         drawClass,
         drawLabel: drawClass === 'high' ? 'heavy draw' : drawClass === 'medium' ? 'rising draw' : 'light draw',
         color: COLORS[drawClass],
+        kw,
         loadSignal,
         queuePressure,
         queueLabel: queuePressure > 0.68 ? 'deep queue' : queuePressure > 0.34 ? 'active queue' : 'short queue',
@@ -163,6 +170,8 @@ export function GridMap({ session }: GridMapProps) {
               'fill-extrusion-height': ['get', 'height'],
               'fill-extrusion-base': 0,
               'fill-extrusion-opacity': 0.86,
+              'fill-extrusion-vertical-gradient': true,
+              'fill-extrusion-height-transition': { duration: 850, delay: 0 },
             },
           },
           {
@@ -296,7 +305,7 @@ export function GridMap({ session }: GridMapProps) {
           <div className={`readout-row ${node.drawClass}`} key={node.dc.id}>
             <b>DC {node.index + 1}{node.speaking ? ' ◉' : ''}</b>
             <span>{node.dc.name}</span>
-            <small>{node.speaking ? 'talking · ' : ''}{node.queueLabel} · {node.dc.queueDepth} queued · {node.dc.slurm?.pendingJobs ?? 0} pending · {Math.round(node.draw * 100)}% draw</small>
+            <small>{node.speaking ? 'talking · ' : ''}{Math.round(node.kw)} kW · {node.queueLabel} · {node.dc.queueDepth} queued · {Math.round(node.draw * 100)}% draw</small>
           </div>
         ))}
       </div>
@@ -345,11 +354,11 @@ function updateMapSources(map: mapboxgl.Map, view: GridView) {
       type: 'Feature',
       geometry: {
         type: 'Polygon',
-        coordinates: [circlePolygon(node.lng, node.lat, 0.28 + node.queuePressure * 0.32)],
+        coordinates: [circlePolygon(node.lng, node.lat, 0.24 + node.loadSignal * 0.44)],
       },
       properties: {
         color: node.color,
-        height: 90000 + node.loadSignal * 1250000,
+        height: 80000 + node.loadSignal * 1550000,
       },
     })),
   });
