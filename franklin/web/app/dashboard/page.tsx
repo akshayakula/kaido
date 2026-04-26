@@ -94,7 +94,33 @@ export default function DashboardPage() {
         localStorage.setItem('fp:' + target.sel, JSON.stringify({ ...cur, ...patch }));
       };
 
-      // Drag removed — bar is now a collapse-only header.
+      // Mouse drag — header is the grab handle.
+      const onMouseDown = (e: MouseEvent) => {
+        if ((e.target as HTMLElement).closest('.fp-collapse')) return;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const m = el.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+        const baseX = m ? parseFloat(m[1]) : 0;
+        const baseY = m ? parseFloat(m[2]) : 0;
+        el.classList.add('fp-dragging');
+        const onMove = (ev: MouseEvent) => {
+          const x = baseX + (ev.clientX - startX);
+          const y = baseY + (ev.clientY - startY);
+          el.style.transform = `translate(${x}px, ${y}px)`;
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          el.classList.remove('fp-dragging');
+          const mm = el.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+          if (mm) save({ x: parseFloat(mm[1]), y: parseFloat(mm[2]) });
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        e.preventDefault();
+      };
+      bar.addEventListener('mousedown', onMouseDown);
+
       const onClick = () => {
         el.classList.toggle('fp-collapsed');
         const collapsed = el.classList.contains('fp-collapsed');
@@ -104,10 +130,11 @@ export default function DashboardPage() {
       btn.addEventListener('click', onClick);
 
       cleanups.push(() => {
+        bar.removeEventListener('mousedown', onMouseDown);
         btn.removeEventListener('click', onClick);
         bar.remove();
         delete el.dataset.fpInited;
-        el.classList.remove('fp-card', 'fp-collapsed');
+        el.classList.remove('fp-card', 'fp-collapsed', 'fp-dragging');
       });
     };
 

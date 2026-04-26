@@ -3442,3 +3442,135 @@ h2 {
 }
 .dashboard-screen.v2 .cylinder-readout { display: none !important; }
 .dashboard-screen.v2 .map-legend { display: none !important; }
+
+/* =====================================================================
+   DASHBOARD v2 — floating overlay cards (replaces the right-rail layout)
+   ===================================================================== */
+.dashboard-screen.v2 {
+  grid-template-columns: 1fr;       /* drop the rail column */
+}
+
+/* Transparent header */
+.dashboard-screen.v2 > .operator-topbar {
+  background: transparent;
+  backdrop-filter: none;
+  border-bottom: 0;
+}
+
+/* The dashboard-stage is a normal grid cell, full width */
+.dashboard-screen.v2 .dashboard-stage {
+  grid-column: 1 / -1;
+}
+
+/* Diagnostics-stack becomes a non-blocking column floating on the right.
+   It contains the cards but doesn't paint anything itself. */
+.dashboard-screen.v2 .diagnostics-stack {
+  position: absolute;
+  top: 70px;
+  right: 18px;
+  bottom: 18px;
+  left: auto;
+  width: 360px;
+  grid-column: auto; grid-row: auto;
+  padding: 0;
+  border: 0;
+  border-left: 0;
+  background: transparent;
+  backdrop-filter: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: visible;
+  pointer-events: none;             /* let map gestures through gaps */
+  z-index: 8;
+}
+.dashboard-screen.v2 .diagnostics-stack > * {
+  pointer-events: auto;             /* re-enable on actual cards */
+}
+
+/* Re-enable the floating-panel chrome on v2 (drag bar, collapse) */
+.dashboard-screen.v2 .fp-bar { display: flex !important; cursor: grab; }
+.dashboard-screen.v2 .fp-card.fp-dragging { transition: none; opacity: 0.95; cursor: grabbing; }
+.dashboard-screen.v2 .fp-card.fp-dragging .fp-bar { cursor: grabbing; }
+.dashboard-screen.v2 .fp-card.fp-collapsed > *:not(.fp-bar) { display: none !important; }
+.dashboard-screen.v2 .fp-card.fp-collapsed { max-height: 32px !important; padding-bottom: 0 !important; }
+.dashboard-screen.v2 .fp-card { transform: var(--fp-translate, none); }
+
+/* Cards size to their content — no inner scroll, no max-height clamp */
+.dashboard-screen.v2 .diagnostics-stack > section,
+.dashboard-screen.v2 .diagnostics-stack .lower-grid > section,
+.dashboard-screen.v2 .terminal-panel,
+.dashboard-screen.v2 .gpu-scheduler-panel,
+.dashboard-screen.v2 .negotiation-panel {
+  max-height: none !important;
+  height: auto !important;
+}
+.dashboard-screen.v2 .agent-list,
+.dashboard-screen.v2 .event-list,
+.dashboard-screen.v2 .conversation-thread {
+  max-height: none !important;
+  overflow: visible !important;
+}
+.dashboard-screen.v2 .terminal-panel .dss-commands {
+  max-height: none !important;
+  overflow: visible !important;
+}
+.dashboard-screen.v2 .terminal-panel { max-height: none !important; }
+
+/* Compact, denser content so an expanded box still fits a reasonable
+   amount of info without forcing scroll */
+.dashboard-screen.v2 .agent-row {
+  padding: 6px 8px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+.dashboard-screen.v2 .agent-row > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+.dashboard-screen.v2 .agent-row b { font-size: 12px; }
+.dashboard-screen.v2 .agent-row span,
+.dashboard-screen.v2 .agent-row small { font-size: 10px; color: var(--muted); }
+.dashboard-screen.v2 .agent-row .bar { height: 4px; }
+.dashboard-screen.v2 .agent-row .slurm-strip {
+  display: flex; gap: 6px; flex-wrap: wrap; font-size: 9px; color: var(--muted);
+}
+.dashboard-screen.v2 .agent-row .override-buttons {
+  display: flex; gap: 4px;
+}
+.dashboard-screen.v2 .agent-row .override-buttons button {
+  height: 22px; min-height: 22px; padding: 0 8px; font-size: 9px; letter-spacing: 0.06em;
+}
+
+.dashboard-screen.v2 .conversation-thread .event {
+  padding: 6px 8px; font-size: 10px; line-height: 1.35;
+}
+.dashboard-screen.v2 .conversation-thread { gap: 4px; }
+.dashboard-screen.v2 .conversation-map { font-size: 9px; gap: 6px; padding: 4px 0; }
+
+.dashboard-screen.v2 .terminal-panel .dss-commands { font-size: 9px; line-height: 1.5; }
+.dashboard-screen.v2 .terminal-panel .dss-facts { font-size: 9px; }
+
+/* Each floating card gets a denser header */
+.dashboard-screen.v2 .fp-bar {
+  margin: 0 0 6px;
+  padding: 3px 6px 3px 8px;
+  border-bottom: 1px solid rgba(228,226,201,0.12);
+  background: rgba(8, 9, 6, 0.62);
+}
+.dashboard-screen.v2 .fp-bar .fp-handle { font-size: 9px; }
+.dashboard-screen.v2 .fp-bar .fp-collapse { height: 18px; width: 22px; font-size: 12px; }
+
+/* Mobile: drop the absolute float, stack cards inline */
+@media (max-width: 600px) {
+  .dashboard-screen.v2 .diagnostics-stack {
+    position: relative;
+    top: auto; right: auto; bottom: auto;
+    width: auto;
+    padding: 12px;
+    pointer-events: auto;
+  }
+}
