@@ -168,12 +168,15 @@ export function DssCircuit({ session }: { session: DemoSession | null }) {
                     const dcTone: Tone = utilPct > 80 ? 'critical' : utilPct > 55 ? 'warn' : 'ok';
                     // Global DC index for "DC N" label
                     const globalIdx = bi + ci * N_BUSES + 1;
+                    // Wire from bus bar (first DC) or from bottom of previous DC box
+                    const wireY1 = ci === 0 ? busY + 14 : LOAD_TOP + (ci - 1) * (BOX_H + BOX_GAP) + BOX_H;
+                    const wireMidY = wireY1 + (y - wireY1) / 2;
                     return (
                       <g key={dc.id} className={`dss-load-group tone-${dcTone}`}>
-                        {/* Tap line down */}
-                        <line x1={bx} y1={ci === 0 ? busY + 14 : y - 2} x2={bx} y2={y} className="dss-wire" markerEnd="url(#arrow)" />
-                        {/* Branch label */}
-                        <text x={bx + 6} y={(ci === 0 ? busY + 14 : y - 2) + 18} className="dss-sub">
+                        {/* Tap line down from bus or previous box */}
+                        <line x1={bx} y1={wireY1} x2={bx} y2={y} className="dss-wire" markerEnd="url(#arrow)" />
+                        {/* Branch label mid-wire */}
+                        <text x={bx + 6} y={wireMidY} className="dss-sub">
                           Line.DC{globalIdx}
                         </text>
                         {/* Load box */}
