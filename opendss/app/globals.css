@@ -583,6 +583,62 @@ h2 {
   margin: 5px 0 4px;
 }
 
+.dss-panel {
+  margin-top: 16px;
+}
+
+.solver-badge {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid rgba(105, 199, 215, 0.18);
+  border-radius: 999px;
+  background: #17282c;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dss-facts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dss-facts span {
+  min-height: 72px;
+  padding: 11px;
+  border: 1px solid rgba(105, 199, 215, 0.16);
+  border-radius: 7px;
+  background: #0b171a;
+  color: var(--muted);
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.dss-facts b {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 12px;
+  text-transform: none;
+}
+
+.dss-commands {
+  max-height: 360px;
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid rgba(105, 199, 215, 0.16);
+  border-radius: 7px;
+  background: #05090b;
+  color: #c8ece6;
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: pre;
+}
+
 .empty,
 .empty-state {
   padding: 18px;
@@ -679,6 +735,7 @@ h2 {
 @media (max-width: 1100px) {
   .dashboard-grid,
   .lower-grid,
+  .dss-facts,
   .join-shell,
   .phone-grid {
     grid-template-columns: 1fr;

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { GridMap } from '@/components/GridMap';
-import type { DemoSession, Scenario } from '@/lib/types';
+import type { DataCenterAgent, DemoSession, Scenario } from '@/lib/types';
 import { summarizeKw } from '@/lib/simulation';
 
 const DEFAULT_SESSION_ID = 'default';
@@ -94,6 +94,7 @@ export default function DashboardPage() {
   const voltageTone =
     !session ? 'waiting' : session.grid.health === 'normal' ? 'steady' : session.grid.health === 'stressed' ? 'strained' : 'critical';
   const solverTone = session?.grid.solver === 'opendss' ? 'OpenDSS solve' : session ? 'approximate' : 'waiting';
+  const dssPreview = session ? buildDssPreview(session) : null;
 
   return (
     <main className="shell dashboard">
@@ -230,6 +231,32 @@ export default function DashboardPage() {
           </form>
         </section>
       </section>
+
+      <section className="panel dss-panel">
+        <div className="panel-head compact">
+          <div>
+            <p className="eyebrow">OpenDSS system</p>
+            <h2>Actual circuit being solved</h2>
+          </div>
+          <span className="solver-badge">{session?.grid.solver === 'opendss' ? 'Live OpenDSS' : 'Approx fallback'}</span>
+        </div>
+        {dssPreview ? (
+          <>
+            <div className="dss-facts">
+              <span><b>Scenario</b>{scenarioLabel(dssPreview.scenario)}</span>
+              <span><b>Source</b>{dssPreview.config.sourcePu.toFixed(3)} pu</span>
+              <span><b>Transformer</b>{dssPreview.config.substationKva.toLocaleString()} kVA</span>
+              <span><b>Feeder limit</b>{dssPreview.config.lineNormamps} A</span>
+              <span><b>Total load</b>{Math.round(dssPreview.feederKw).toLocaleString()} kW</span>
+            </div>
+            <pre className="dss-commands" aria-label="OpenDSS command list">
+              {dssPreview.commands.map((command, index) => `${String(index + 1).padStart(2, '0')}. ${command}`).join('\n')}
+            </pre>
+          </>
+        ) : (
+          <div className="empty">Waiting for the default session.</div>
+        )}
+      </section>
     </main>
   );
 }
@@ -248,4 +275,66 @@ function getDrawLevel(session: DemoSession) {
   if (averageDraw > 0.68) return 'heavy';
   if (averageDraw > 0.36) return 'moderate';
   return 'light';
+}
+
+type DssConfig = {
+  sourcePu: number;
+  substationKva: number;
+  lineNormamps: number;
+  cooling: number;
+};
+
+function getScenarioConfig(scenario: Scenario): DssConfig {
+  const configs: Record<Scenario, DssConfig> = {
+    nominal: { sourcePu: 1.02, substationKva: 8500, lineNormamps: 430, cooling: 0.28 },
+    heatwave: { sourcePu: 1, substationKva: 7600, lineNormamps: 390, cooling: 0.44 },
+    feeder_constraint: { sourcePu: 0.985, substationKva: 6500, lineNormamps: 320, cooling: 0.32 },
+    renewable_drop: { sourcePu: 0.992, substationKva: 7000, lineNormamps: 360, cooling: 0.3 },
+    demand_spike: { sourcePu: 1, substationKva: 7800, lineNormamps: 380, cooling: 0.36 },
+  };
+  return configs[scenario];
+}
+
+function buildDssPreview(session: DemoSession) {
+  const config = getScenarioConfig(session.scenario);
+  const commands = [
+    'Clear',
+    `New Circuit.AgentGrid basekv=12.47 pu=${config.sourcePu} phases=3 bus1=sourcebus angle=0 MVAsc3=200000 MVAsc1=210000`,
+    `New Transformer.Substation phases=3 windings=2 buses=(sourcebus,subbus) conns=(wye,wye) kvs=(12.47,12.47) kvas=(${config.substationKva},${config.substationKva}) %rs=(0.2,0.2) xhl=1.25`,
+    `New Linecode.Feeder nphases=3 r1=0.26 x1=0.34 r0=0.52 x0=1.08 units=km normamps=${config.lineNormamps}`,
+    'New Line.Backbone bus1=subbus bus2=bus0 phases=3 linecode=Feeder length=0.35 units=km',
+  ];
+  let feederKw = 0;
+
+  session.datacenters.forEach((dc, index) => {
+    const loadNumber = index + 1;
+    const bus = `dc${loadNumber}bus`;
+    const lengthKm = 0.45 + (loadNumber % 4) * 0.18;
+    const kw = datacenterKw(dc, config.cooling);
+    const kvar = kw * 0.33;
+    feederKw += kw;
+    commands.push(`New Line.DC${loadNumber} bus1=bus0 bus2=${bus} phases=3 linecode=Feeder length=${lengthKm.toFixed(3)} units=km`);
+    commands.push(
+      `New Load.Load${loadNumber} bus1=${bus} phases=3 conn=wye kv=12.47 kw=${kw.toFixed(3)} kvar=${kvar.toFixed(3)} model=1`
+    );
+  });
+
+  if (!session.datacenters.length) {
+    feederKw = 80;
+    commands.push('New Load.StationService bus1=bus0 phases=3 conn=wye kv=12.47 kw=80 kvar=25 model=1');
+  }
+
+  commands.push('Set Voltagebases=[12.47]', 'CalcVoltageBases', 'Set maxcontroliter=50', 'Solve');
+  return { commands, config, feederKw, scenario: session.scenario };
+}
+
+function datacenterKw(dc: DataCenterAgent, coolingFactor: number) {
+  const allocated = dc.slurm?.allocatedGpus ?? Math.round(dc.actualUtilization * dc.gpuCount);
+  const util = Math.max(dc.actualUtilization, allocated / Math.max(1, dc.gpuCount));
+  const computeKw = dc.gpuCount * dc.gpuKw * util;
+  return Math.max(0, dc.baseKw + computeKw + computeKw * coolingFactor - dc.batterySupportKw);
+}
+
+function scenarioLabel(scenario: Scenario) {
+  return scenario.replaceAll('_', ' ');
 }
