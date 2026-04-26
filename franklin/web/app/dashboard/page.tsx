@@ -7,25 +7,28 @@ import { OpenDssPanel } from '@/components/dash/OpenDssPanel';
 import { AnalogReadouts } from '@/components/dash/AnalogReadouts';
 import { A2APanel } from '@/components/dash/A2APanel';
 import { JoinPanel } from '@/components/dash/JoinPanel';
+import { PjmPanel } from '@/components/dash/PjmPanel';
 import { useDashLayout, useDragSwap } from '@/components/dash/DashGrid';
 import { clearLayout } from '@/lib/dashLayout';
 import type { DemoSession, Scenario } from '@/lib/types';
 import { scenarioOptions } from '@/lib/scenarios';
 
 const DEFAULT_SESSION_ID = 'default';
-const PANEL_IDS = ['opendss', 'readouts', 'a2a', 'join'] as const;
+const PANEL_IDS = ['opendss', 'readouts', 'a2a', 'pjm', 'join'] as const;
 const DEFAULT_ORDER: string[] = [...PANEL_IDS];
 
 const PANEL_ICONS: Record<string, string> = {
   opendss:  '⚡',
   readouts: '◐',
   a2a:      '◌',
+  pjm:      '⚙',
   join:     '+',
 };
 const PANEL_LABELS: Record<string, string> = {
   opendss:  'Electrical layout',
   readouts: 'Capacity & health',
   a2a:      'A2A chat',
+  pjm:      'PJM ISO live',
   join:     'Upstash data centers',
 };
 
@@ -125,6 +128,11 @@ export default function DashboardPage() {
         title: 'Agent-to-agent chat',
         node: <A2APanel session={session} onSendMessage={sendOperatorMessage} />,
       },
+      pjm: {
+        eyebrow: 'PJM ISO · gridstatus.io',
+        title: 'Live load & fuel mix',
+        node: <PjmPanel />,
+      },
       join: {
         eyebrow: 'Upstash data centers',
         title: 'Join · manage',
@@ -170,9 +178,10 @@ export default function DashboardPage() {
 
   // Approximate panel widths/heights — used for the non-overlapping default layout.
   const PANEL_SIZE: Record<string, { w: number; h: number }> = {
-    opendss:  { w: 420, h: 360 },
-    readouts: { w: 320, h: 320 },
-    a2a:      { w: 380, h: 480 },
+    opendss:  { w: 420, h: 340 },
+    readouts: { w: 320, h: 300 },
+    a2a:      { w: 380, h: 420 },
+    pjm:      { w: 320, h: 340 },
     join:     { w: 340, h: 360 },
   };
 
@@ -184,10 +193,11 @@ export default function DashboardPage() {
     const sz = PANEL_SIZE;
 
     return {
-      opendss:  { left: M,                                top: HUD_OFFSET },
-      readouts: { left: Math.max(M, w - sz.readouts.w - M), top: HUD_OFFSET },
-      a2a:      { left: M,                                top: Math.max(HUD_OFFSET + sz.opendss.h + 12, h - sz.a2a.h - M) },
-      join:     { left: Math.max(M, w - sz.join.w - M),   top: Math.max(HUD_OFFSET + sz.readouts.h + 12, h - sz.join.h - M) },
+      opendss:  { left: M,                                                 top: HUD_OFFSET },
+      readouts: { left: Math.max(M, w - sz.readouts.w - M),                top: HUD_OFFSET },
+      pjm:      { left: Math.max(M, w - sz.pjm.w - M),                     top: Math.max(HUD_OFFSET + sz.readouts.h + 10, h - sz.pjm.h - M) },
+      a2a:      { left: M,                                                 top: Math.max(HUD_OFFSET + sz.opendss.h + 10, h - sz.a2a.h - M) },
+      join:     { left: Math.max(M, (w - sz.join.w) / 2),                  top: Math.max(HUD_OFFSET + 24, h - sz.join.h - M) },
     } as Record<string, { left: number; top: number }>;
   }
 
@@ -261,6 +271,9 @@ export default function DashboardPage() {
           <button type="button" className="dash4-reset" onClick={resetLayout} title="Reset layout">↺</button>
           <a className="dash4-link" href="/grid-sensor" title="Open Franklin sensors">
             <span aria-hidden="true">◉</span>Sensors
+          </a>
+          <a className="dash4-link" href="/grid" title="PJM live + OpenDSS deep-dive">
+            <span aria-hidden="true">⚡</span>Grid
           </a>
           <a className="dash4-link dash4-link--accent" href="/join">Join →</a>
         </div>
