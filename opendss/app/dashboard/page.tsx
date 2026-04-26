@@ -18,6 +18,7 @@ const scenarios: { value: Scenario; label: string }[] = [
 export default function DashboardPage() {
   const [session, setSession] = useState<DemoSession | null>(null);
   const [chatMessage, setChatMessage] = useState('');
+  const [joinCopied, setJoinCopied] = useState(false);
 
   useEffect(() => {
     refresh(DEFAULT_SESSION_ID);
@@ -90,6 +91,13 @@ export default function DashboardPage() {
     }
   }
 
+  async function copyJoinUrl() {
+    if (!joinUrl) return;
+    await navigator.clipboard.writeText(joinUrl);
+    setJoinCopied(true);
+    window.setTimeout(() => setJoinCopied(false), 1400);
+  }
+
   const drawLevel = session ? getDrawLevel(session) : 'waiting';
   const voltageTone =
     !session ? 'waiting' : session.grid.health === 'normal' ? 'steady' : session.grid.health === 'stressed' ? 'strained' : 'critical';
@@ -140,7 +148,11 @@ export default function DashboardPage() {
           <section className="join-card">
             <p className="eyebrow">Participant entry</p>
             <h2>Users go to the website and join the shared grid</h2>
-            <input readOnly value={joinUrl || 'Loading join link'} />
+            <div className="join-link-row">
+              <input readOnly value={joinUrl || 'Loading join link'} onClick={(event) => event.currentTarget.select()} />
+              <button onClick={copyJoinUrl} disabled={!joinUrl}>{joinCopied ? 'Copied' : 'Copy'}</button>
+            </div>
+            <a className="primary-link" href="/join">Open join page</a>
           </section>
         </aside>
       </section>

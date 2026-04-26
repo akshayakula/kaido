@@ -18,17 +18,25 @@ const redis =
 export async function saveSession(session: DemoSession) {
   session.updatedAt = Date.now();
   if (redis) {
-    await redis.set(sessionKey(session.id), session, { ex: SESSION_TTL_SECONDS });
-    await redis.zadd(ACTIVE_KEY, { score: session.updatedAt, member: session.id });
-    return;
+    try {
+      await redis.set(sessionKey(session.id), session, { ex: SESSION_TTL_SECONDS });
+      await redis.zadd(ACTIVE_KEY, { score: session.updatedAt, member: session.id });
+      return;
+    } catch (error) {
+      console.warn('Redis unavailable; saving session in memory.', error);
+    }
   }
   memory.set(session.id, { session: structuredClone(session), expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000 });
 }
 
 export async function getSession(id: string) {
   if (redis) {
-    const session = await redis.get<DemoSession>(sessionKey(id));
-    return session ? normalizeSession(session) : null;
+    try {
+      const session = await redis.get<DemoSession>(sessionKey(id));
+      return session ? normalizeSession(session) : null;
+    } catch (error) {
+      console.warn('Redis unavailable; reading session from memory.', error);
+    }
   }
   cleanupMemory();
   return memory.get(id)?.session ? normalizeSession(structuredClone(memory.get(id)!.session)) : null;
@@ -44,11 +52,15 @@ export async function getOrCreateDefaultSession() {
 
 export async function listSessions(): Promise<SessionSummary[]> {
   if (redis) {
-    const cutoff = Date.now() - SESSION_TTL_SECONDS * 1000;
-    await redis.zremrangebyscore(ACTIVE_KEY, 0, cutoff);
-    const ids = await redis.zrange<string[]>(ACTIVE_KEY, 0, -1, { rev: true });
-    const sessions = await Promise.all(ids.map((id) => getSession(id)));
-    return sessions.filter(Boolean).map((session) => summarize(session as DemoSession));
+    try {
+      const cutoff = Date.now() - SESSION_TTL_SECONDS * 1000;
+      await redis.zremrangebyscore(ACTIVE_KEY, 0, cutoff);
+      const ids = await redis.zrange<string[]>(ACTIVE_KEY, 0, -1, { rev: true });
+      const sessions = await Promise.all(ids.map((id) => getSession(id)));
+      return sessions.filter(Boolean).map((session) => summarize(session as DemoSession));
+    } catch (error) {
+      console.warn('Redis unavailable; listing in-memory sessions.', error);
+    }
   }
   cleanupMemory();
   return [...memory.values()]

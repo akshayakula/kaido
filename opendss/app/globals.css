@@ -339,6 +339,22 @@ h2 {
   text-transform: uppercase;
 }
 
+.primary-link {
+  display: inline-flex;
+  width: 100%;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  border: 1px solid var(--text);
+  background: var(--text);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(700px, 1fr) 390px;
@@ -883,6 +899,22 @@ h2 {
 
 .join-card input {
   margin-top: 12px;
+}
+
+.join-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.join-link-row input {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.join-link-row button {
+  min-width: 74px;
 }
 
 .lower-grid {
