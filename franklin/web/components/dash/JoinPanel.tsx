@@ -105,7 +105,7 @@ export function JoinPanel({
                   </button>
                 </li>
               )) : (
-                <li className="join2__empty">No data centers in Upstash.</li>
+                <li className="join2__empty">No data centers yet.</li>
               )}
             </ul>
             {all.length > PAGE_SIZE && (

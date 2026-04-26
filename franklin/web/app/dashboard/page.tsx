@@ -29,7 +29,7 @@ const PANEL_LABELS: Record<string, string> = {
   readouts: 'Capacity & health',
   a2a:      'A2A chat',
   pjm:      'PJM ISO live',
-  join:     'Upstash data centers',
+  join:     'Data centers',
 };
 
 export default function DashboardPage() {
@@ -134,7 +134,7 @@ export default function DashboardPage() {
         node: <PjmPanel />,
       },
       join: {
-        eyebrow: 'Upstash data centers',
+        eyebrow: 'Data centers',
         title: 'Join · manage',
         node: (
           <JoinPanel

@@ -5,7 +5,6 @@ import type { DemoSession, SessionSummary } from './types';
 const SESSION_TTL_SECONDS = 60 * 60 * 4;
 const ACTIVE_KEY = 'sessions:active';
 export const DEFAULT_SESSION_ID = 'default';
-const memory = new Map<string, { session: DemoSession; expiresAt: number }>();
 
 function normalizeUpstashUrl(raw: string | undefined): string | null {
   if (!raw) return null;
@@ -23,14 +22,14 @@ if (_upstashUrl && _upstashToken) {
   try {
     redis = new Redis({ url: _upstashUrl, token: _upstashToken });
   } catch (err) {
-    console.warn('[session-store] failed to init Upstash client; falling back to memory:', err);
+    console.warn('[session-store] failed to init Upstash client:', err);
     redis = null;
   }
 }
 
 export type SessionStoreHealth = {
   configured: boolean;
-  mode: 'upstash' | 'memory' | 'memory-fallback';
+  mode: 'upstash' | 'unconfigured' | 'unreachable';
   ok: boolean;
   host: string | null;
   ping?: string;
@@ -42,7 +41,7 @@ export type SessionStoreHealth = {
 export async function getSessionStoreHealth(): Promise<SessionStoreHealth> {
   const host = getUpstashHost();
   if (!redis) {
-    return { configured: false, mode: 'memory', ok: true, host };
+    return { configured: false, mode: 'unconfigured', ok: false, host };
   }
 
   try {
@@ -63,7 +62,7 @@ export async function getSessionStoreHealth(): Promise<SessionStoreHealth> {
   } catch (error) {
     return {
       configured: true,
-      mode: 'memory-fallback',
+      mode: 'unreachable',
       ok: false,
       host,
       error: error instanceof Error ? error.message : 'Unknown Upstash error',
@@ -73,35 +72,18 @@ export async function getSessionStoreHealth(): Promise<SessionStoreHealth> {
 
 export async function saveSession(session: DemoSession) {
   session.updatedAt = Date.now();
-  memory.set(session.id, { session: structuredClone(session), expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000 });
-  if (redis) {
-    try {
-      await redis.set(sessionKey(session.id), session, { ex: SESSION_TTL_SECONDS });
-      await redis.zadd(ACTIVE_KEY, { score: session.updatedAt, member: session.id });
-      return;
-    } catch (error) {
-      console.warn('Redis unavailable; saving session in memory.', error);
-    }
+  if (!redis) {
+    throw new Error('Upstash Redis not configured: set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN');
   }
+  await redis.set(sessionKey(session.id), session, { ex: SESSION_TTL_SECONDS });
+  await redis.zadd(ACTIVE_KEY, { score: session.updatedAt, member: session.id });
 }
 
 export async function getSession(id: string) {
-  cleanupMemory();
-  const cached = memory.get(id)?.session;
-  if (cached) return normalizeSession(structuredClone(cached));
-
-  if (redis) {
-    try {
-      const session = await redis.get<DemoSession>(sessionKey(id));
-      if (!session) return null;
-      const normalized = normalizeSession(session);
-      memory.set(id, { session: structuredClone(normalized), expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000 });
-      return normalized;
-    } catch (error) {
-      console.warn('Redis unavailable; reading session from memory.', error);
-    }
-  }
-  return null;
+  if (!redis) return null;
+  const session = await redis.get<DemoSession>(sessionKey(id));
+  if (!session) return null;
+  return normalizeSession(session);
 }
 
 export async function getOrCreateDefaultSession() {
@@ -113,21 +95,12 @@ export async function getOrCreateDefaultSession() {
 }
 
 export async function listSessions(): Promise<SessionSummary[]> {
-  if (redis) {
-    try {
-      const cutoff = Date.now() - SESSION_TTL_SECONDS * 1000;
-      await redis.zremrangebyscore(ACTIVE_KEY, 0, cutoff);
-      const ids = await redis.zrange<string[]>(ACTIVE_KEY, 0, -1, { rev: true });
-      const sessions = await Promise.all(ids.map((id) => getSession(id)));
-      return sessions.filter(Boolean).map((session) => summarize(session as DemoSession));
-    } catch (error) {
-      console.warn('Redis unavailable; listing in-memory sessions.', error);
-    }
-  }
-  cleanupMemory();
-  return [...memory.values()]
-    .map((entry) => summarize(entry.session))
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+  if (!redis) return [];
+  const cutoff = Date.now() - SESSION_TTL_SECONDS * 1000;
+  await redis.zremrangebyscore(ACTIVE_KEY, 0, cutoff);
+  const ids = await redis.zrange<string[]>(ACTIVE_KEY, 0, -1, { rev: true });
+  const sessions = await Promise.all(ids.map((id) => getSession(id)));
+  return sessions.filter(Boolean).map((session) => summarize(session as DemoSession));
 }
 
 export async function updateSession(id: string, updater: (session: DemoSession) => void | Promise<void>) {
@@ -163,9 +136,3 @@ function getUpstashHost() {
   }
 }
 
-function cleanupMemory() {
-  const now = Date.now();
-  for (const [id, entry] of memory.entries()) {
-    if (entry.expiresAt < now) memory.delete(id);
-  }
-}

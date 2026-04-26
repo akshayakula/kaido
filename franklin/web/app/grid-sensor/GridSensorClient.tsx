@@ -265,7 +265,7 @@ export default function GridSensorClient() {
           <h1>Field telemetry &amp; transformer health</h1>
           <p>
             Live fusion of <strong>thermal</strong>, <strong>acoustic</strong>, and{' '}
-            <strong>humidity</strong> signals from edge sensors. Polling Upstash every {REFRESH_MS / 1000}s.
+            <strong>humidity</strong> signals from edge sensors. Polling every {REFRESH_MS / 1000}s.
             {fetchedAge !== null && (
               <>
                 {' '}

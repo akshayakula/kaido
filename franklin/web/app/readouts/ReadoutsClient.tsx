@@ -7,7 +7,7 @@ const DEFAULT_SESSION_ID = 'default';
 
 type StoreHealth = {
   configured: boolean;
-  mode: 'upstash' | 'memory' | 'memory-fallback';
+  mode: 'upstash' | 'unconfigured' | 'unreachable';
   ok: boolean;
   host: string | null;
   ping?: string;
@@ -215,7 +215,7 @@ function JsonReadout({ session, storeHealth }: { session: DemoSession | null; st
         <pre>{JSON.stringify({ session }, null, 2)}</pre>
       </article>
       <article>
-        <h2>GET /api/upstash/health</h2>
+        <h2>Store health</h2>
         <pre>{JSON.stringify(storeHealth, null, 2)}</pre>
       </article>
     </div>
@@ -237,9 +237,9 @@ function formatActor(actor: string) {
 
 function storeHealthLabel(health: StoreHealth | null) {
   if (!health) return 'checking';
-  if (health.mode === 'upstash' && health.ok) return 'Upstash live';
-  if (health.mode === 'memory-fallback') return 'Redis fallback';
-  if (!health.configured) return 'memory only';
+  if (health.mode === 'upstash' && health.ok) return 'live';
+  if (health.mode === 'unreachable') return 'store unreachable';
+  if (!health.configured) return 'unconfigured';
   return health.ok ? health.mode : 'store error';
 }
 
