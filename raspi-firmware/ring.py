@@ -379,8 +379,11 @@ def render_comet(strip, _unused, delta_c, mic_level, t):
 
     # --- constant-state south anchor glow (always lit) ---
     if abs_d < 0.1:
+        # Stable resting color: violet/purple breathing — distinct from the
+        # ember/icy palettes used for warming/cooling so the operator can
+        # tell at a glance "this is the calm state, not a small drift."
         breathe = 0.40 + 0.18 * math.sin(t * 1.5)
-        anchor = (breathe, breathe, breathe * 0.95)
+        anchor = (breathe * 0.60, breathe * 0.10, breathe)
         spread = 1
     else:
         mag = min(1.0, abs_d / 2.0)
@@ -400,9 +403,10 @@ def render_comet(strip, _unused, delta_c, mic_level, t):
                           anchor[2] * falloff * 0.55)
 
     # --- comet head + long smooth trail ---
-    # Head color: white when stable, redder/bluer with magnitude.
+    # Head color: vivid purple when stable (matches the south anchor),
+    # transitions to ember-red / icy-blue with magnitude as Δ moves.
     if abs_d < 0.1:
-        head_color = (0.85, 0.85, 0.95)
+        head_color = (0.55, 0.10, 0.85)
     else:
         head_color = _delta_to_color(delta_c)
     # Trail length: 3 LEDs minimum (so it always reads as a comet, not a dot),
