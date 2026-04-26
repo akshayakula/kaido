@@ -52,8 +52,15 @@ export default function DashboardPage() {
   }, [session?.id]);
 
   async function refresh(id: string) {
-    const response = await fetch(`/api/sessions/${id}/state`);
-    if (!response.ok) return;
+    let response = await fetch(`/api/sessions/${id}/state`);
+    // Session was wiped (TTL/manual) or never existed. Bootstrap and retry.
+    if (response.status === 404) {
+      await fetch('/api/sessions', { method: 'POST' });
+      response = await fetch(`/api/sessions/${id}/state`);
+      if (!response.ok) return;
+    } else if (!response.ok) {
+      return;
+    }
     const data = (await response.json()) as { session: DemoSession };
     setSession(data.session);
   }

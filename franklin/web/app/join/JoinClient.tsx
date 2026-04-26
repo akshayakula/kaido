@@ -17,9 +17,19 @@ export function JoinClient() {
 
   useEffect(() => {
     let alive = true;
-    fetch('/api/sessions')
-      .then((response) => response.json())
-      .then(async (data: { sessions: SessionSummary[]; session?: DemoSession }) => {
+    (async () => {
+      try {
+        let data = (await fetch('/api/sessions').then((r) => r.json())) as {
+          sessions: SessionSummary[];
+          session?: DemoSession | null;
+        };
+        if (!data.session) {
+          await fetch('/api/sessions', { method: 'POST' });
+          data = (await fetch('/api/sessions').then((r) => r.json())) as {
+            sessions: SessionSummary[];
+            session?: DemoSession | null;
+          };
+        }
         if (!alive) return;
         setSessions(data.sessions);
         setError('');
@@ -36,10 +46,10 @@ export function JoinClient() {
           clearJoinIdentity(DEFAULT_SESSION_ID);
           window.sessionStorage.removeItem(`joined:${DEFAULT_SESSION_ID}:${id.datacenterId}`);
         }
-      })
-      .catch(() => {
+      } catch {
         if (alive) setError('Could not load the shared grid session. Try refreshing.');
-      });
+      }
+    })();
     return () => { alive = false; };
   }, []);
 
